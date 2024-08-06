@@ -1,0 +1,157 @@
+x-okapi-env: &okapi-module
+  networks: [ fpm-net ]
+  env_file: [ env/okapi-modules.env ]
+  deploy:
+    resources:
+      limits:
+        memory: 256m
+      reservations:
+        memory: 256m
+
+x-vault-env: &vault-env
+  SECRET_STORE_TYPE: ${SECRET_STORE_TYPE}
+  SECRET_STORE_VAULT_TOKEN: ${SECRET_STORE_VAULT_TOKEN}
+  SECRET_STORE_VAULT_ADDRESS: ${SECRET_STORE_VAULT_ADDRESS}
+
+##############################################
+####---- app-platform-minimal modules ----####
+##############################################
+services:
+  mod-users:
+    <<: *okapi-module
+    container_name: mod-users
+    image: ${MOD_USERS_REPOSITORY}:${MOD_USERS_VERSION}
+    profiles: [ app-platform-minimal, legacy ]
+    ports:
+      - "9001:8081"
+      - "10001:5005"
+
+  mod-configuration:
+    <<: *okapi-module
+    container_name: mod-configuration
+    image: ${MOD_CONFIGURATION_REPOSITORY}:${MOD_CONFIGURATION_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9002:8081"
+      - "10002:5005"
+
+  mod-permissions:
+    <<: *okapi-module
+    container_name: mod-permissions
+    image: ${MOD_PERMISSIONS_REPOSITORY}:${MOD_PERMISSIONS_VERSION}
+    profiles: [ app-platform-minimal, legacy ]
+    ports:
+      - "9003:8081"
+      - "10003:5005"
+
+  mod-tags:
+    <<: *okapi-module
+    container_name: mod-tags
+    image: ${MOD_TAGS_REPOSITORY}:${MOD_TAGS_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9004:8081"
+      - "10004:5005"
+
+  mod-users-bl:
+    <<: *okapi-module
+    container_name: mod-users-bl
+    image: ${MOD_USERS_BL_REPOSITORY}:${MOD_USERS_BL_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9005:8081"
+      - "10005:5005"
+
+  mod-password-validator:
+    <<: *okapi-module
+    container_name: mod-password-validator
+    image: ${MOD_PASSWORD_VALIDATOR_REPOSITORY}:${MOD_PASSWORD_VALIDATOR_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9007:8081"
+      - "10007:5005"
+
+  mod-notes:
+    <<: *okapi-module
+    container_name: mod-notes
+    image: ${MOD_NOTES_REPOSITORY}:${MOD_NOTES_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9008:8081"
+      - "10008:5005"
+
+  mod-users-keycloak:
+    <<: *okapi-module
+    container_name: mod-users-keycloak
+    image: ${MOD_USERS_KEYCLOAK_REPOSITORY}:${MOD_USERS_KEYCLOAK_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9009:8081"
+      - "10009:5005"
+    environment:
+      <<: *vault-env
+      KC_URL: http://keycloak:8080
+      KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+      KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+      JAVA_OPTIONS: >-
+        -Dhost=okapi
+        -Dstorage=postgres
+        -Dpostgres_host=db
+        -Dpostgres_username=okapi_rw
+        -Dpostgres_password=${OKAPI_DB_PASSWORD}
+        -Dokapi.url=http://sc-users-keycloak:8081
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+
+  mod-login-keycloak:
+    <<: *okapi-module
+    container_name: mod-login-keycloak
+    image: ${MOD_LOGIN_KEYCLOAK_REPOSITORY}:${MOD_LOGIN_KEYCLOAK_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9010:8081"
+      - "10010:5005"
+    environment:
+      <<: *vault-env
+      KC_URL: http://keycloak:8080
+      KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+      KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+      KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      X_OKAPI_TOKEN_HEADER_ENABLED: true
+
+  mod-roles-keycloak:
+    <<: *okapi-module
+    container_name: mod-roles-keycloak
+    image: ${MOD_ROLES_KEYCLOAK_REPOSITORY}:${MOD_ROLES_KEYCLOAK_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9011:8081"
+      - "10011:5005"
+    environment:
+      <<: *vault-env
+      KC_URL: http://keycloak:8080
+      KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+      KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+
+  mod-settings:
+    <<: *okapi-module
+    container_name: mod-settings
+    image: ${MOD_SETTINGS_REPOSITORY}:${MOD_SETTINGS_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9012:8081"
+      - "10012:5005"
+
+  mod-scheduler:
+    <<: *okapi-module
+    container_name: mod-scheduler
+    image: ${MOD_SCHEDULER_REPOSITORY}:${MOD_SCHEDULER_VERSION}
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "9020:8081"
+      - "10020:5005"
+    environment:
+      <<: *vault-env
+      JAVA_OPTIONS: >-
+        -Dokapi.url=http://api-gateway:8000
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -XX:MaxRAMPercentage=85.0
+        -Xms128m -Xmx240m

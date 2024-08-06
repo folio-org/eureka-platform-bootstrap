@@ -1,0 +1,196 @@
+x-sidecar-module: &sidecar-module
+  image: ${FOLIO_MODULE_SIDECAR_REPOSITORY}:${FOLIO_MODULE_SIDECAR_VERSION}
+  networks: [ fpm-net ]
+  deploy:
+    resources:
+      limits:
+        cpus: 0.5
+        memory: 140m
+      reservations:
+        cpus: 0.5
+        memory: 140m
+
+x-sidecar-env: &sidecar-env
+  KC_URL: http://keycloak:8080
+  JAVA_OPTIONS: "-XX:MaxRAMPercentage=85.0 -Xms50m -Xmx128m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+  TM_CLIENT_URL: http://mgr-tenants:8081
+  AM_CLIENT_URL: http://mgr-applications:8081
+  TE_CLIENT_URL: http://mgr-tenant-entitlements:8081
+  KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+  KC_SERVICE_CLIENT_ID: ${KC_SERVICE_CLIENT_ID}
+  KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+  SECRET_STORE_TYPE: ${SECRET_STORE_TYPE}
+  SECRET_STORE_VAULT_ADDRESS: ${SECRET_STORE_VAULT_ADDRESS}
+  SECRET_STORE_VAULT_TOKEN: ${SECRET_STORE_VAULT_TOKEN}
+
+###############################################
+####---- app-platform-minimal sidecars ----####
+###############################################
+services:
+  sc-users:
+    <<: *sidecar-module
+    container_name: sc-users
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19001:8081"
+      - "11001:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-users
+      MODULE_VERSION: ${MOD_USERS_VERSION}
+      MODULE_URL: http://mod-users:8081
+      SIDECAR_URL: http://sc-users:8081
+
+  sc-configuration:
+    <<: *sidecar-module
+    container_name: sc-configuration
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19002:8081"
+      - "11002:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-configuration
+      MODULE_VERSION: ${MOD_CONFIGURATION_VERSION}
+      MODULE_URL: http://mod-configuration:8081
+      SIDECAR_URL: http://sc-configuration:8081
+
+  sc-permissions:
+    <<: *sidecar-module
+    container_name: sc-permissions
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19003:8081"
+      - "11003:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-permissions
+      MODULE_VERSION: ${MOD_PERMISSIONS_VERSION}
+      MODULE_URL: http://mod-permissions:8081
+      SIDECAR_URL: http://sc-permissions:8081
+
+  sc-tags:
+    <<: *sidecar-module
+    container_name: sc-tags
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19004:8081"
+      - "11004:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-tags
+      MODULE_VERSION: ${MOD_TAGS_VERSION}
+      MODULE_URL: http://mod-tags:8081
+      SIDECAR_URL: http://sc-tags:8081
+
+  sc-users-bl:
+    <<: *sidecar-module
+    container_name: sc-users-bl
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19005:8081"
+      - "11005:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-users-bl
+      MODULE_VERSION: ${MOD_USERS_BL_VERSION}
+      MODULE_URL: http://mod-users-bl:8081
+      SIDECAR_URL: http://sc-users-bl:8081
+
+  sc-password-validator:
+    <<: *sidecar-module
+    container_name: sc-password-validator
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19007:8081"
+      - "11007:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-password-validator
+      MODULE_VERSION: ${MOD_PASSWORD_VALIDATOR_VERSION}
+      MODULE_URL: http://mod-password-validator:8081
+      SIDECAR_URL: http://sc-password-validator:8081
+
+  sc-notes:
+    <<: *sidecar-module
+    container_name: sc-notes
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19008:8081"
+      - "11008:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-notes
+      MODULE_VERSION: ${MOD_NOTES_VERSION}
+      MODULE_URL: http://mod-notes:8081
+      SIDECAR_URL: http://sc-notes:8081
+
+  sc-users-keycloak:
+    <<: *sidecar-module
+    container_name: sc-users-keycloak
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19009:8081"
+      - "11009:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-users-keycloak
+      MODULE_VERSION: ${MOD_USERS_KEYCLOAK_VERSION}
+      MODULE_URL: http://mod-users-keycloak:8081
+      SIDECAR_URL: http://sc-users-keycloak:8081
+
+  sc-login-keycloak:
+    <<: *sidecar-module
+    container_name: sc-login-keycloak
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19010:8081"
+      - "11010:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-login-keycloak
+      MODULE_VERSION: ${MOD_LOGIN_KEYCLOAK_VERSION}
+      MODULE_URL: http://mod-login-keycloak:8081
+      SIDECAR_URL: http://sc-login-keycloak:8081
+
+  sc-roles-keycloak:
+    <<: *sidecar-module
+    container_name: sc-roles-keycloak
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19011:8081"
+      - "11011:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-roles-keycloak
+      MODULE_VERSION: ${MOD_ROLES_KEYCLOAK_VERSION}
+      MODULE_URL: http://mod-roles-keycloak:8081
+      SIDECAR_URL: http://sc-roles-keycloak:8081
+
+  sc-settings:
+    <<: *sidecar-module
+    container_name: sc-settings
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19012:8081"
+      - "11012:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-settings
+      MODULE_VERSION: ${MOD_SETTINGS_VERSION}
+      MODULE_URL: http://mod-settings:8081
+      SIDECAR_URL: http://sc-settings:8081
+
+  sc-scheduler:
+    <<: *sidecar-module
+    container_name: sc-scheduler
+    profiles: [ app-platform-minimal ]
+    ports:
+      - "19020:8081"
+      - "11020:5005"
+    environment:
+      <<: *sidecar-env
+      MODULE_NAME: mod-scheduler
+      MODULE_VERSION: ${MOD_SCHEDULER_VERSION}
+      MODULE_URL: http://mod-scheduler:8081
+      SIDECAR_URL: http://sc-scheduler:8081
