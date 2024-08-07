@@ -30,6 +30,7 @@ services:
       - app-notification
       - app-core-storage
       - keycloak-cluster
+    restart: on-failure
     depends_on:
       db:
         condition: service_started
