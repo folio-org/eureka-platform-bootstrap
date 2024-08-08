@@ -9,6 +9,7 @@ Provides docker-based minimal eureka platform
 * [Table of contents](#table-of-contents)
 * [Run applications in docker](#run-applications-in-docker)
   * [Script environment variables](#script-environment-variables)
+    * [Module versions](#module-versions)
   * [Hosts file configuration](#hosts-file-configuration)
   * [Additional images build](#additional-images-build)
     * [[Temporary step] Keycloak image build](#temporary-step-keycloak-image-build)
@@ -25,9 +26,6 @@ Provides docker-based minimal eureka platform
   * [Registration of application descriptor](#registration-of-application-descriptor)
     * [app-platform-minimal discovery information](#app-platform-minimal-discovery-information)
   * [app-platform-minimal deployment](#app-platform-minimal-deployment)
-    * [[Temporary step] Sidecar image build](#temporary-step-sidecar-image-build)
-      * [Download of folio-module sidecar repository](#download-of-folio-module-sidecar-repository)
-      * [Install and build docker image](#install-and-build-docker-image-2)
     * [Running containers](#running-containers)
   * [Create a tenant](#create-a-tenant)
     * [Enable (entitle) app-platform-minimal for tenant](#enable-entitle-app-platform-minimal-for-tenant)
@@ -60,7 +58,7 @@ Required tools:
 
 ## Script environment variables
 
-This variables can be overwritten in `.env.local`
+This variables can be overwritten in `.env.local.credentials`
 
 | Variable                               | Default value                 | Description                                                                                    |
 |----------------------------------------|-------------------------------|------------------------------------------------------------------------------------------------|
@@ -71,16 +69,34 @@ This variables can be overwritten in `.env.local`
 | MGR_APPLICATIONS_DB_PASSWORD           | mgr_applications_admin        | mgr-applications database password                                                             |
 | MGR_TENANTS_DB_PASSWORD                | mgr_tenants_admin             | mgr-tenants database password                                                                  |
 | MGR_TENANT_ENTITLEMENTS_DB_PASSWORD    | mgr_tenant_entitlements_admin | mgr-tenant-entitlements database password                                                      |
-| MGR_COMPONENTS_SECURITY_ENABLED        | true                          | Defines if mgr-components endpoints are protected with Keycloak                                |
-| MGR_COMPONENTS_KEYCLOAK_IMPORT_ENABLED | true                          | Defines if Keycloak resources must be created during container start-up for mgr-components     |
 | KC_ADMIN_PASSWORD                      | keycloak_system_admin         | Keycloak admin password                                                                        |
-| KC_ADMIN_CLIENT_ID                     | be-admin-client               | Keycloak admin client id                                                                       |
 | KC_ADMIN_CLIENT_SECRET                 | be-admin-client-secret        | Keycloak admin client secret                                                                   |
-| KC_LOGIN_CLIENT_SUFFIX                 | -login-app                    | a suffix for a tenant client that will perform all authentication and authorization requests   |
-| KC_SERVICE_CLIENT_ID                   | m2m-client                    | Name of service client (participated in module-to-module requests)                             |
 
 > **_NOTE:_**  _It is recommended to generate your own set of credentials for a new deployment instead of using default
 > values, see how to generate [deployment credentials](#generate-local-credentials-and-configuration)._
+
+This variables can be overwritten in `.env.local`:
+
+### Module versions
+| Variable                           | Default value                   | Description                                                                                  |
+|------------------------------------|---------------------------------|----------------------------------------------------------------------------------------------|
+| KC_LOGIN_CLIENT_SUFFIX             | -login-app                      | a suffix for a tenant client that will perform all authentication and authorization requests |
+| KC_SERVICE_CLIENT_ID               | m2m-client                      | Name of service client (participated in module-to-module requests)                           |
+| KC_ADMIN_CLIENT_ID                 | be-admin-client                 | Keycloak admin client id                                                                     |
+| MGR_TENANTS_VERSION                | latest                          | Docker image version for `mgr-tenants`                                                       |
+| MGR_TENANTS_VERSION                | latest                          | Docker image version for `mgr-tenants`                                                       |
+| MGR_TENANTS_REPOSITORY             | folioci/mgr-tenants             | Docker repository for `mgr-tenants`                                                          |
+| MGR_APPLICATIONS_VERSION           | latest                          | Docker image version for `mgr-applications`                                                  |
+| MGR_APPLICATIONS_REPOSITORY        | folioci/mgr-applications        | Docker repository for `mgr-applications`                                                     |
+| MGR_TENANT_ENTITLEMENTS_VERSION    | latest                          | Docker image version for `mgr-tenant-entitlements`                                           |
+| MGR_TENANT_ENTITLEMENTS_REPOSITORY | folioci/mgr-tenant-entitlements | Docker repository for `mgr-tenant-entitlements`                                              |
+| FOLIO_MODULE_SIDECAR_VERSION       | latest                          | Docker image version for `folio-module-sidecar`                                              |
+| FOLIO_MODULE_SIDECAR_REPOSITORY    | folioci/folio-module-sidecar    | Docker repository for `folio-module-sidecar`                                                 |
+
+> **_NOTE:_** _Folio module versions are populated with the following script (based on application descriptor):_
+> ```shell
+> python ./misc/docker-module-updater/run.py
+> ```
 
 ## Hosts file configuration
 
@@ -153,10 +169,17 @@ cd docker
 To set local credentials and configuration a following script must be executed:
 
 ```shell
-sh ./set-local-variables.sh
+sh ./set-local-credentials.sh
 ```
 
 > **_NOTE:_** _This step is optional, however it will provide more secure deployment for local development_
+> In addition, once credentials is set and core profile is running - changing them will break deployment, and the
+> workaround is to manually update them in `.env.local.crendentials` and in corresponding container or to start
+> deployment from scratch by removing docker volumes (before executing a script - deployment must be stopped with
+> ```./stop-docker-containers.sh```):
+> ```shell
+> docker volume rm -f folio-platform-minimal_db folio-platform-minimal_kafka-data folio-platform-minimal_vault-data
+> ```
 
 ## Update module versions
 
@@ -366,26 +389,6 @@ curl -X POST --silent \
 > ```
 
 ## app-platform-minimal deployment
-
-### [Temporary step] Sidecar image build
-
-folio-module-sidecar does not have working deployment, so image must be build manually
-
-#### Download of folio-module sidecar repository
-
-> **_NOTE:_** _This step is optional and if you already have this project - skip it_
-
-```shell
-git clone git@github.com:folio-org/folio-module-sidecar.git /path/to/your/folio/projects
-```
-
-#### Install and build docker image
-
-This step must be executed in folio-module-sidecar directory
-
-```shell
-mvn clean install -DskipTests && docker build -t folio-module-sidecar .
-```
 
 > **_NOTE:_** _it's also possible to run native image build by following the instruction in `folio-module-sidecar`
 project, image values can be customized in `.env.local`_:

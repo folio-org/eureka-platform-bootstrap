@@ -24,8 +24,11 @@ def readJson(file):
 
 
 def readFileLines(file):
-  with open(file, "r") as stream:
-    return [line.rstrip() for line in stream.readlines()]
+  try:
+    with open(file, "r") as stream:
+      return [line.rstrip() for line in stream.readlines()]
+  except FileNotFoundError:
+    return []
 
 
 def writeFileLines(file, lines):

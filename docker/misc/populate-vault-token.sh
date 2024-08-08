@@ -4,7 +4,7 @@ cd "$(dirname "$0")" || exit
 
 vaultToken=$(sh ./get-vault-token.sh)
 
-envLocalConfig="../.env.local"
+envLocalConfig="../.env.local.credentials"
 
 if [ ! -f "$envLocalConfig" ]; then
   touch "$envLocalConfig"

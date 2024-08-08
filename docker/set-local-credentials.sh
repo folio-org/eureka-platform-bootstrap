@@ -2,19 +2,12 @@
 
 cd "$(dirname "$0")" || exit
 
-localConfigFile=".env.local"
+localConfigFile=".env.local.credentials"
 echo "This script will configure local $localConfigFile for folio platform installation"
 
-if [[ -f .env.local ]]; then
-  source .env.local
+if [[ -f "$localConfigFile" ]]; then
+  source "$localConfigFile"
 fi
-
-# mgr components configuration
-defaultMgrComponentsKeycloakIntegrationEnabled=${MGR_COMPONENTS_KC_INTEGRATION_ENABLED:-true}
-defaultMgrComponentsKongIntegrationEnabled=${MGR_COMPONENTS_KONG_INTEGRATION_ENABLED:-true}
-defaultMgrComponentsOkapiIntegrationEnabled=${MGR_COMPONENTS_OKAPI_INTEGRATION_ENABLED:-false}
-defaultMgrComponentsSecurityEnabled=${MGR_COMPONENTS_SECURITY_ENABLED:-false}
-defaultMgrComponentsKeycloakImportEnabled=${MGR_COMPONENTS_KEYCLOAK_IMPORT_ENABLED:-true}
 
 # Database configuration (default)
 defaultPostgresPassword=${POSTGRES_PASSWORD:-postgres_admin}
@@ -22,23 +15,15 @@ defaultOkapiDbPassword=${OKAPI_DB_PASSWORD:-okapi_admin}
 defaultKongDbPassword=${KONG_DB_PASSWORD:-kong_admin}
 
 # mgr-components configuration (default)
-defaultMgrApplicationsDbPassword=${MGR_APPLICATIONS_DB_PASSWORD:-app_manager_admin}
+defaultMgrApplicationsDbPassword=${MGR_APPLICATIONS_DB_PASSWORD:-mgr_applications_admin}
 defaultMgrApplicationsValidationMode=${MGR_APPLICATIONS_VALIDATION_MODE:-basic}
-defaultMgrTenantsDbPassword=${MGR_TENANTS_DB_PASSWORD:-tenant_manager_admin}
-defaultMgrTenantEntitlementsDbPassword=${MGR_TENANT_ENTITLEMENTS_DB_PASSWORD:-tenant_entitlement_admin}
+defaultMgrTenantsDbPassword=${MGR_TENANTS_DB_PASSWORD:-mgr_tenants_admin}
+defaultMgrTenantEntitlementsDbPassword=${MGR_TENANT_ENTITLEMENTS_DB_PASSWORD:-mgr_tenant_entitlements_admin}
 
 # Keycloak configuration
 defaultKeycloakDbPassword=${KC_DB_PASSWORD:-keycloak_admin}
 defaultKeycloakAdminPassword=${KC_ADMIN_PASSWORD:-keycloak_system_admin}
-defaultKeycloakAdminClientId=${KC_ADMIN_CLIENT_ID:-be-admin-client}
 defaultKeycloakAdminClientSecret=${KC_ADMIN_CLIENT_SECRET:-be-admin-client-secret}
-defaultKeycloakServiceClientId=${KC_SERVICE_CLIENT_ID:-m2m-client}
-defaultKeycloakLoginClientSuffix=${KC_LOGIN_CLIENT_SUFFIX:--login-app}
-
-echo
-echo "### mgr-component configuration"
-read -p "mgr components security enabled [$defaultMgrComponentsSecurityEnabled]: " -r mgrComponentsSecurityEnabled
-read -p "mgr components keycloak import enabled [$defaultMgrComponentsKeycloakImportEnabled]: " -r mgrComponentsKeycloakImportEnabled
 
 echo "### Database configuration"
 
@@ -53,18 +38,11 @@ read -p "mgr-tenant-entitlements database password [$defaultMgrTenantEntitlement
 echo
 echo "### Keycloak configuration"
 read -p "Keycloak admin password [$defaultKeycloakAdminPassword]: " -r keycloakAdminPassword
-read -p "Keycloak folio admin client id [$defaultKeycloakAdminClientId]: " -r keycloakAdminClientId
 read -p "Keycloak folio admin client secret [$defaultKeycloakAdminClientSecret]: " -r keycloakAdminClientSecret
-read -p "Keycloak service (module-to-module) client id [$defaultKeycloakServiceClientId]: " -r keycloakServiceClientId
-read -p "Keycloak login client suffix [$defaultKeycloakLoginClientSuffix]: " -r keycloakLoginClientSuffix
 
 
 cat > $localConfigFile <<- EOM
-### mgr-components-configuration
-export MGR_COMPONENTS_SECURITY_ENABLED=${mgrComponentsSecurityEnabled:-${defaultMgrComponentsSecurityEnabled}}
-export MGR_COMPONENTS_KEYCLOAK_IMPORT_ENABLED=${mgrComponentsKeycloakImportEnabled:-${defaultMgrComponentsKeycloakImportEnabled}}
-
-### Database configuration
+### Database credentials
 export POSTGRES_PASSWORD=${postgresPassword:-${defaultPostgresPassword}}
 export KC_DB_PASSWORD=${keycloakDbPassword:-${defaultKeycloakDbPassword}}
 export OKAPI_DB_PASSWORD=${okapiDbPassword:-${defaultOkapiDbPassword}}
@@ -73,10 +51,7 @@ export MGR_APPLICATIONS_DB_PASSWORD=${mgrApplicationsDbPassword:-${defaultMgrApp
 export MGR_TENANTS_DB_PASSWORD=${mgrTenantsDbPassword:-${defaultMgrTenantsDbPassword}}
 export MGR_TENANT_ENTITLEMENTS_DB_PASSWORD=${mgrTenantEntitlementsDbPassword:-${defaultMgrTenantEntitlementsDbPassword}}
 
-### Keycloak configuration
+### Keycloak credentials
 export KC_ADMIN_PASSWORD=${keycloakAdminPassword:-${defaultKeycloakAdminPassword}}
-export KC_ADMIN_CLIENT_ID=${keycloakAdminClientId:-${defaultKeycloakAdminClientId}}
 export KC_ADMIN_CLIENT_SECRET=${keycloakAdminClientSecret:-${defaultKeycloakAdminClientSecret}}
-export KC_SERVICE_CLIENT_ID=${keycloakServiceClientId:-${defaultKeycloakServiceClientId}}
-export KC_LOGIN_CLIENT_SUFFIX=${keycloakLoginClientSuffix:-${defaultKeycloakLoginClientSuffix}}
 EOM
