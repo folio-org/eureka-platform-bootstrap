@@ -96,6 +96,46 @@ This command will build custom vault image, with autoconfiguration for initial c
 sh ./misc/build-images.sh
 ```
 
+### [Temporary step] Keycloak image build
+
+folio-module-sidecar does not have working deployment, so image must be build manually
+
+#### Download of folio-keycloak repository
+
+> **_NOTE:_** _This step is optional and if you already have this project - skip it_
+
+```shell
+git clone git@github.com:folio-org/folio-keycloak.git /path/to/your/folio/projects
+```
+
+#### Install and build docker image
+
+This step must be executed in folio-keycloak directory
+
+```shell
+docker build -t folio-keycloak:25.0.1 .
+```
+
+### [Temporary step] Kong image build
+
+folio-module-sidecar does not have working deployment, so image must be build manually
+
+#### Download of folio-kong repository
+
+> **_NOTE:_** _This step is optional and if you already have this project - skip it_
+
+```shell
+git clone git@github.com:folio-org/folio-kong.git /path/to/your/folio/projects
+```
+
+#### Install and build docker image
+
+This step must be executed in folio-kong directory
+
+```shell
+docker build -t folio-kong:3.7.1-ubuntu .
+```
+
 Before all the steps, make sure that you are in the `docker` directory:
 
 ```shell
