@@ -1,0 +1,5 @@
+/.idea/
+
+docker/.env.local*
+**/.temp/
+**/tmp/

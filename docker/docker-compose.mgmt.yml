@@ -1,0 +1,72 @@
+x-core-service: &mgmt-service
+  networks: [ fpm-net ]
+  env_file: [ env/mgr-components.env ]
+  deploy:
+    resources:
+      limits:
+        cpus: 1.0
+        memory: 400M
+      reservations:
+        cpus: 1.0
+        memory: 256M
+  depends_on:
+    db:
+      condition: service_healthy
+  profiles:
+    - mgr-components
+    - app-platform-minimal
+    - app-notification
+    - app-core-storage
+
+###############################################
+####---- Manager components containers ----####
+###############################################
+services:
+  mgr-applications:
+    <<: *mgmt-service
+    container_name: mgr-applications
+    image: ${MGR_APPLICATIONS_REPOSITORY}:${MGR_APPLICATIONS_VERSION}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "9901:8081"
+      - "10901:5005"
+    environment:
+      TE_URL: http://mgr-tenant-entitlements:8081
+      DB_DATABASE: mgr_applications
+      DB_USERNAME: mgr_applications_rw
+      MODULE_URL: http://mgr-applications:8081
+      DB_PASSWORD: ${MGR_APPLICATIONS_DB_PASSWORD}
+
+  mgr-tenants:
+    <<: *mgmt-service
+    container_name: mgr-tenants
+    image: ${MGR_TENANTS_REPOSITORY}:${MGR_TENANTS_VERSION}
+    ports:
+      - "9902:8081"
+      - "10902:5005"
+    environment:
+      DB_DATABASE: mgr_tenants
+      DB_USERNAME: mgr_tenants_rw
+      DB_PASSWORD: ${MGR_TENANTS_DB_PASSWORD}
+      MODULE_URL: http://mgr-tenants:8081
+      KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+      KC_SERVICE_CLIENT_ID: ${KC_SERVICE_CLIENT_ID}
+
+  mgr-tenant-entitlements:
+    <<: *mgmt-service
+    container_name: mgr-tenant-entitlements
+    image: ${MGR_TENANT_ENTITLEMENTS_REPOSITORY}:${MGR_TENANT_ENTITLEMENTS_VERSION}
+    ports:
+      - "9903:8081"
+      - "10903:5005"
+    environment:
+      tenant.url: http://mgr-tenants:8081
+      AM_CLIENT_URL: http://mgr-applications:8081
+      MODULE_URL: http://mgr-tenant-entitlements:8081
+      DB_DATABASE: mgr_tenant_entitlements
+      DB_USERNAME: mgr_tenant_entitlements_rw
+      DB_PASSWORD: ${MGR_TENANT_ENTITLEMENTS_DB_PASSWORD}
+      KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+      FLOW_ENGINE_PRINT_FLOW_RESULTS: true

@@ -1,0 +1,125 @@
+x-core-service: &core-service
+  networks: [ fpm-net ]
+  profiles:
+    - core
+    - mgr-components
+    - app-platform-minimal
+    - app-notification
+    - app-core-storage
+
+###########################################
+####---- Infrastructure containers ----####
+###########################################
+services:
+  db:
+    <<: *core-service
+    container_name: db
+    image: postgres:12-alpine
+    networks: [ fpm-net ]
+    profiles:
+      - core
+      - mgr-components
+      - app-platform-minimal
+      - app-notification
+      - app-core-storage
+      - legacy
+      - keycloak-cluster
+    env_file: [ env/db.env ]
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  zookeeper:
+    <<: *core-service
+    container_name: zookeeper
+    image: zookeeper
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: nc -z localhost 2181 || exit -1
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
+  kafka:
+    <<: *core-service
+    container_name: kafka
+    image: wurstmeister/kafka:2.13-2.8.1
+    env_file: [ env/kafka.env ]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - kafka-data:/kafka
+    restart: always
+    ports:
+      - "9092:9092"
+
+  vault:
+    <<: *core-service
+    container_name: vault
+    image: folio-vault:1.13.3
+    volumes:
+      - vault-data:/vault/data:rw
+    cap_add: [ IPC_LOCK ]
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: [ "CMD", "vault", "status" ]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET}
+
+  api-gateway:
+    <<: *core-service
+    container_name: api-gateway
+    image: folio-kong:3.7.1-ubuntu
+    env_file: [ env/kong.env ]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+      - "8443:8443"
+      - "8444:8444"
+    healthcheck:
+      test: [ "CMD", "kong", "health" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-ui:
+    <<: *core-service
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 9080:8080
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_JMXPORT: 9997
+
+networks:
+  fpm-net:
+    name: folio-platform-minimal
+    driver: bridge
+
+volumes:
+  db: { }
+  vault-data: { }
+  kafka-data: { }
