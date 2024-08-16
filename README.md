@@ -284,7 +284,7 @@ Adding a new application to `mgr-applications` will require following steps:
   _This token is used to communicate with mgr-components_
   ```shell
   export KC_ADMIN_CLIENT_ID={{value from .env.local, if not defined - from .env}}
-  export KC_ADMIN_CLIENT_SECRET={value from .env.local, if not defined - from .env}
+  export KC_ADMIN_CLIENT_SECRET={value from .env.local.credentials, if not defined - from .env}
   ```
   ```shell
   systemAccessToken=$(curl -X POST --silent \
