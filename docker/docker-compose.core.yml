@@ -14,7 +14,7 @@ services:
   db:
     <<: *core-service
     container_name: db
-    image: postgres:12-alpine
+    image: postgres:16-alpine
     networks: [ fpm-net ]
     profiles:
       - core
@@ -59,7 +59,6 @@ services:
         condition: service_healthy
     volumes:
       - kafka-data:/kafka
-    restart: always
     ports:
       - "9092:9092"
 

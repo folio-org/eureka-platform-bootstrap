@@ -5,7 +5,7 @@ x-core-service: &mgmt-service
     resources:
       limits:
         cpus: 1.0
-        memory: 400M
+        memory: 384m
       reservations:
         cpus: 1.0
         memory: 256M
