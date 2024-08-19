@@ -496,7 +496,7 @@ export KC_SERVICE_CLIENT_SECRET={{value from previous step}}
 
 ```shell
 accessToken=$(curl -X POST --silent \
-  ---header "Content-Type: application/x-www-form-urlencoded" \
+  --header "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "client_id=${KC_SERVICE_CLIENT_ID}" \
   --data-urlencode "grant_type=client_credentials" \
   --data-urlencode "client_secret=${KC_SERVICE_CLIENT_SECRET}" \
