@@ -4,7 +4,7 @@ x-okapi-env: &okapi-module
   deploy:
     resources:
       limits:
-        memory: 256m
+        memory: 384m
       reservations:
         memory: 256m
 
@@ -101,6 +101,7 @@ services:
         -Dpostgres_password=${OKAPI_DB_PASSWORD}
         -Dokapi.url=http://sc-users-keycloak:8081
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+        -XX:MaxRAMPercentage=70.0
 
   mod-login-keycloak:
     <<: *okapi-module
@@ -153,5 +154,5 @@ services:
       <<: *vault-env
       JAVA_OPTIONS: >-
         -Dokapi.url=http://api-gateway:8000
-        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -XX:MaxRAMPercentage=85.0
-        -Xms128m -Xmx240m
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+        -XX:MaxRAMPercentage=70.0

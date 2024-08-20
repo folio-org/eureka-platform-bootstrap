@@ -4,15 +4,13 @@ x-sidecar-module: &sidecar-module
   deploy:
     resources:
       limits:
-        cpus: 0.5
-        memory: 140m
+        memory: 224m
       reservations:
-        cpus: 0.5
-        memory: 140m
+        memory: 192m
 
 x-sidecar-env: &sidecar-env
   KC_URL: http://keycloak:8080
-  JAVA_OPTIONS: "-XX:MaxRAMPercentage=85.0 -Xms50m -Xmx128m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+  JAVA_OPTIONS: "-XX:+UseZGC -Xms64m -Xmx64m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
   TM_CLIENT_URL: http://mgr-tenants:8081
   AM_CLIENT_URL: http://mgr-applications:8081
   TE_CLIENT_URL: http://mgr-tenant-entitlements:8081
