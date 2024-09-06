@@ -100,6 +100,7 @@ services:
         -Dpostgres_username=okapi_rw
         -Dpostgres_password=${OKAPI_DB_PASSWORD}
         -Dokapi.url=http://sc-users-keycloak:8081
+        -Djdk.internal.httpclient.disableHostnameVerification=true
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
         -XX:MaxRAMPercentage=70.0
 
@@ -154,5 +155,6 @@ services:
       <<: *vault-env
       JAVA_OPTIONS: >-
         -Dokapi.url=http://api-gateway:8000
+        -Djdk.internal.httpclient.disableHostnameVerification=true
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
         -XX:MaxRAMPercentage=70.0
