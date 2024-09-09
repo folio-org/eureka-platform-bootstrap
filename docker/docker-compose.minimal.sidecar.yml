@@ -20,6 +20,7 @@ x-sidecar-env: &sidecar-env
   SECRET_STORE_TYPE: ${SECRET_STORE_TYPE}
   SECRET_STORE_VAULT_ADDRESS: ${SECRET_STORE_VAULT_ADDRESS}
   SECRET_STORE_VAULT_TOKEN: ${SECRET_STORE_VAULT_TOKEN}
+  WEB_CLIENT_TLS_VERIFY_HOSTNAME: false
 
 ###############################################
 ####---- app-platform-minimal sidecars ----####
