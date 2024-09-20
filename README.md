@@ -120,7 +120,8 @@ sh ./misc/build-images.sh
 
 ### [Temporary step] Keycloak image build
 
-folio-module-sidecar does not have working deployment, so image must be build manually
+Public Folio docker [repository](https://hub.docker.com/u/folioorg) does not contain image for the `folio-keycloak`,
+so it must be built manually
 
 #### Download of folio-keycloak repository
 
@@ -140,7 +141,8 @@ docker build -t folio-keycloak:25.0.1 .
 
 ### [Temporary step] Kong image build
 
-folio-module-sidecar does not have working deployment, so image must be build manually
+Public Folio docker [repository](https://hub.docker.com/u/folioorg) does not contain image for the `folio-kong`,
+so it must be built manually
 
 #### Download of folio-kong repository
 
