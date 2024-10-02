@@ -37,21 +37,21 @@
       "location": "http://sc-password-validator:8081"
     },
     {
-      "id": "mod-login-keycloak-1.4.3-SNAPSHOT.79",
+      "id": "mod-login-keycloak-1.5.1-SNAPSHOT.92",
       "name": "mod-login-keycloak",
-      "version": "1.4.3-SNAPSHOT.79",
+      "version": "1.5.1-SNAPSHOT.92",
       "location": "http://sc-login-keycloak:8081"
     },
     {
-      "id": "mod-users-keycloak-1.5.3-SNAPSHOT.93",
+      "id": "mod-users-keycloak-1.6.1-SNAPSHOT.101",
       "name": "mod-users-keycloak",
-      "version": "1.5.3-SNAPSHOT.93",
+      "version": "1.6.1-SNAPSHOT.101",
       "location": "http://sc-users-keycloak:8081"
     },
     {
-      "id": "mod-roles-keycloak-1.4.3-SNAPSHOT.111",
+      "id": "mod-roles-keycloak-1.4.7-SNAPSHOT.142",
       "name": "mod-roles-keycloak",
-      "version": "1.4.3-SNAPSHOT.111",
+      "version": "1.4.7-SNAPSHOT.142",
       "location": "http://sc-roles-keycloak:8081"
     },
     {
@@ -61,9 +61,9 @@
       "location": "http://sc-notes:8081"
     },
     {
-      "id": "mod-scheduler-1.2.3-SNAPSHOT.72",
+      "id": "mod-scheduler-1.3.1-SNAPSHOT.85",
       "name": "mod-scheduler",
-      "version": "1.2.3-SNAPSHOT.72",
+      "version": "1.3.1-SNAPSHOT.85",
       "location": "http://sc-scheduler:8081"
     },
     {

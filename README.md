@@ -364,7 +364,7 @@ curl -X POST --silent \
 > curl -X GET --silent \
 >   --header "Content-Type: application/json" \
 >   --header "x-okapi-token: ${systemAccessToken}" \
->   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.1?full=true" | jq
+>   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.2?full=true" | jq
 > ```
 
 ### app-platform-minimal discovery information
@@ -387,7 +387,7 @@ curl -X POST --silent \
 > curl -X GET --silent \
 >   --header "Content-Type: application/json" \
 >   --header "x-okapi-token: ${systemAccessToken}" \
->   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.1/discovery?limit=100" | jq
+>   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.2/discovery?limit=100" | jq
 > ```
 
 ## app-platform-minimal deployment
@@ -445,7 +445,7 @@ The following command will install `app-platform-minimal` for prepared `test` te
 curl -X POST --silent \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
-  --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "app-platform-minimal-0.0.17-SNAPSHOT.1" ] }' \
+  --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "app-platform-minimal-0.0.17-SNAPSHOT.2" ] }' \
   "http://localhost:8000/entitlements?ignoreErrors=true" | jq
 ```
 
