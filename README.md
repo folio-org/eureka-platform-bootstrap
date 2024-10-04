@@ -136,7 +136,7 @@ git clone git@github.com:folio-org/folio-keycloak.git /path/to/your/folio/projec
 This step must be executed in folio-keycloak directory
 
 ```shell
-docker build -t folio-keycloak:25.0.1 .
+docker build -t folio-keycloak:25.0.6 .
 ```
 
 ### [Temporary step] Kong image build
