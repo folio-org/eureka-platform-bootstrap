@@ -118,48 +118,6 @@ This command will build custom vault image, with autoconfiguration for initial c
 sh ./misc/build-images.sh
 ```
 
-### [Temporary step] Keycloak image build
-
-Public Folio docker [repository](https://hub.docker.com/u/folioorg) does not contain image for the `folio-keycloak`,
-so it must be built manually
-
-#### Download of folio-keycloak repository
-
-> **_NOTE:_** _This step is optional and if you already have this project - skip it_
-
-```shell
-git clone git@github.com:folio-org/folio-keycloak.git /path/to/your/folio/projects
-```
-
-#### Install and build docker image
-
-This step must be executed in folio-keycloak directory
-
-```shell
-docker build -t folio-keycloak:25.0.1 .
-```
-
-### [Temporary step] Kong image build
-
-Public Folio docker [repository](https://hub.docker.com/u/folioorg) does not contain image for the `folio-kong`,
-so it must be built manually
-
-#### Download of folio-kong repository
-
-> **_NOTE:_** _This step is optional and if you already have this project - skip it_
-
-```shell
-git clone git@github.com:folio-org/folio-kong.git /path/to/your/folio/projects
-```
-
-#### Install and build docker image
-
-This step must be executed in folio-kong directory
-
-```shell
-docker build -t folio-kong:3.7.1-ubuntu .
-```
-
 Before all the steps, make sure that you are in the `docker` directory:
 
 ```shell
@@ -288,6 +246,14 @@ Adding a new application to `mgr-applications` will require following steps:
   export KC_ADMIN_CLIENT_ID={{value from .env.local, if not defined - from .env}}
   export KC_ADMIN_CLIENT_SECRET={value from .env.local.credentials, if not defined - from .env}
   ```
+
+*  _If you have not set up local credentials, you can use default values:_
+  ```shell
+  export KC_ADMIN_CLIENT_ID=be-admin-client
+  export KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
+  ```
+
+
   ```shell
   systemAccessToken=$(curl -X POST --silent \
     --header "Content-Type: application/x-www-form-urlencoded" \
