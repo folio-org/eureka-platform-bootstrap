@@ -12,12 +12,6 @@ Provides docker-based minimal eureka platform
     * [Module versions](#module-versions)
   * [Hosts file configuration](#hosts-file-configuration)
   * [Additional images build](#additional-images-build)
-    * [[Temporary step] Keycloak image build](#temporary-step-keycloak-image-build)
-      * [Download of folio-keycloak repository](#download-of-folio-keycloak-repository)
-      * [Install and build docker image](#install-and-build-docker-image)
-    * [[Temporary step] Kong image build](#temporary-step-kong-image-build)
-      * [Download of folio-kong repository](#download-of-folio-kong-repository)
-      * [Install and build docker image](#install-and-build-docker-image-1)
   * [Generate local credentials and configuration](#generate-local-credentials-and-configuration)
   * [Update module versions](#update-module-versions)
   * [Deploying core services](#deploying-core-services)
@@ -41,6 +35,7 @@ Provides docker-based minimal eureka platform
   * [folio-module-sidecar](#folio-module-sidecar)
 * [Miscellaneous scripts](#miscellaneous-scripts)
   * [module-updater](#module-updater)
+  * [arm-images-builder](#arm-images-builder)
   * [Verified versions](#verified-versions)
       * [Docker version](#docker-version)
       * [Docker-compose CLI version](#docker-compose-cli-version)
@@ -537,6 +532,14 @@ to the [Application Descriptor](descriptors/app-platform-minimal/descriptor.json
 
 ```shell
 python ./misc/docker-module-updater/run.py
+```
+
+## arm-images-builder
+Run the following command to build the ARM images from the `eureka-platform-bootstrap` folder:
+More: [ARM Images Builder](misc/arm-images-builder/README.md)
+
+```bash
+./misc/arm-image-builder/build.sh
 ```
 
 ## Verified versions
