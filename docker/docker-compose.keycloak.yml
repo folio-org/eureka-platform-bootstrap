@@ -1,5 +1,5 @@
 x-keycloak-service: &keycloak-service
-  image: folio-keycloak:25.0.6
+  image: folioci/folio-keycloak:latest
   networks: [ fpm-net ]
   env_file: [ env/keycloak.env ]
   profiles: [ keycloak-cluster ]
