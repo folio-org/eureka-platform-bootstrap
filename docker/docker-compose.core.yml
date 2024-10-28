@@ -84,7 +84,7 @@ services:
   api-gateway:
     <<: *core-service
     container_name: api-gateway
-    image: folio-kong:3.7.1-ubuntu
+    image: folioci/folio-kong:latest
     env_file: [ env/kong.env ]
     depends_on:
       db:
