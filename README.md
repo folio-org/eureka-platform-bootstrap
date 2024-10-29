@@ -470,34 +470,38 @@ accessToken=$(curl -X POST --silent \
 ### Create a user: folio
 
 ```shell
-curl -X POST --silent \
---header 'x-okapi-tenant: test' \
---header 'Content-Type: application/json' \
---header "x-okapi-token: ${accessToken}" \
---data-raw '{
-    "active": true,
-    "departments": [],
-    "proxyFor": [],
-    "type": "patron",
-    "username": "folio",
-    "personal": {
-      "lastName": "Test",
-      "firstName": "Test",
-      "email": "test_user@example.com",
-      "addresses": []
-    }
-  }' \
-  'http://localhost:8000/users-keycloak/users' | jq
+user=$(curl -X POST --silent \
+  --header 'x-okapi-tenant: test' \
+  --header 'Content-Type: application/json' \
+  --header "x-okapi-token: ${accessToken}" \
+  --data-raw '{
+      "active": true,
+      "departments": [],
+      "proxyFor": [],
+      "type": "patron",
+      "username": "folio",
+      "personal": {
+        "lastName": "Test",
+        "firstName": "Test",
+        "email": "test_user@example.com",
+        "addresses": []
+      }
+    }' \
+  'http://localhost:8000/users-keycloak/users')
+  
+echo $user | jq
 ```
 
 ### Create folio user credentials
 
 ```shell
+user_id=$(echo $user | jq -r ".id")
+
 curl -X POST --silent  \
   --header 'x-okapi-tenant: test' \
   --header 'Content-Type: application/json' \
   --header "x-okapi-token: ${accessToken}" \
-  --data '{ "username": "folio", "password": "folio" }' \
+  --data '{ "username": "folio", "userId": "'${user_id}'", "password": "folio" }' \
   'http://localhost:8000/authn/credentials' | jq
 ```
 
