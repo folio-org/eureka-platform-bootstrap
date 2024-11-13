@@ -49,7 +49,7 @@ build_module() {
 
     cd "$name" || exit
 
-    if [[ "$version" == *"SNAPSHOT"* ]]; then
+    if [[ "$version" == *"SNAPSHOT"* ]] || [[ "$version" == "latest" ]]; then
         git checkout master --quiet
     else
         git checkout "v$version" --quiet
@@ -66,7 +66,7 @@ build_module() {
         fi
     fi
 
-    if [[ "$version" == *"SNAPSHOT"* ]]; then
+    if [[ "$version" == *"SNAPSHOT"* ]] || [[ "$version" == "latest" ]]; then
         docker build --no-cache -t "folioci/$name:$version" .
     else
         docker build --no-cache -t "folioorg/$name:$version" .
@@ -99,7 +99,7 @@ additional_repos=(
 )
 
 for repo in "${additional_repos[@]}"; do
-    build_module "$repo" "SNAPSHOT" "false"
+    build_module "$repo" "latest" "false"
 done
 
 # Repositories to build without Maven
@@ -109,7 +109,7 @@ repos_without_maven=(
 )
 
 for repo in "${repos_without_maven[@]}"; do
-    build_module "$repo" "SNAPSHOT" "true"
+    build_module "$repo" "latest" "true"
 done
 
 echo "Script completed."

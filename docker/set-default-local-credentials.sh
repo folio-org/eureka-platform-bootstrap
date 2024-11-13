@@ -25,21 +25,6 @@ defaultKeycloakDbPassword=${KC_DB_PASSWORD:-keycloak_admin}
 defaultKeycloakAdminPassword=${KC_ADMIN_PASSWORD:-admin}
 defaultKeycloakAdminClientSecret=${KC_ADMIN_CLIENT_SECRET:-be-admin-client-secret}
 
-echo "### Database configuration"
-
-read -p "Master database password [$defaultPostgresPassword]: " -r postgresPassword
-read -p "Keycloak database password [$defaultKeycloakDbPassword]: " -r keycloakDbPassword
-read -p "Okapi database password [$defaultOkapiDbPassword]: " -r okapiDbPassword
-read -p "Kong database password [$defaultKongDbPassword]: " -r kongDbPassword
-read -p "mgr-applications database password [$defaultMgrApplicationsDbPassword]: " -r mgrApplicationsDbPassword
-read -p "mgr-tenants database password [$defaultMgrTenantsDbPassword]: " -r mgrTenantsDbPassword
-read -p "mgr-tenant-entitlements database password [$defaultMgrTenantEntitlementsDbPassword]: " -r mgrTenantEntitlementsDbPassword
-
-echo
-echo "### Keycloak configuration"
-read -p "Keycloak admin password [$defaultKeycloakAdminPassword]: " -r keycloakAdminPassword
-read -p "Keycloak folio admin client secret [$defaultKeycloakAdminClientSecret]: " -r keycloakAdminClientSecret
-
 
 cat > $localConfigFile <<- EOM
 ### Database credentials

@@ -64,7 +64,7 @@ This variables can be overwritten in `.env.local.credentials`
 | MGR_APPLICATIONS_DB_PASSWORD           | mgr_applications_admin        | mgr-applications database password                                                             |
 | MGR_TENANTS_DB_PASSWORD                | mgr_tenants_admin             | mgr-tenants database password                                                                  |
 | MGR_TENANT_ENTITLEMENTS_DB_PASSWORD    | mgr_tenant_entitlements_admin | mgr-tenant-entitlements database password                                                      |
-| KC_ADMIN_PASSWORD                      | keycloak_system_admin         | Keycloak admin password                                                                        |
+| KC_ADMIN_PASSWORD                      | admin                         | Keycloak admin password                                                                        |
 | KC_ADMIN_CLIENT_SECRET                 | be-admin-client-secret        | Keycloak admin client secret                                                                   |
 
 > **_NOTE:_**  _It is recommended to generate your own set of credentials for a new deployment instead of using default
@@ -488,7 +488,7 @@ user=$(curl -X POST --silent \
       }
     }' \
   'http://localhost:8000/users-keycloak/users')
-  
+
 echo $user | jq
 ```
 
