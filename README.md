@@ -36,6 +36,8 @@ Provides docker-based minimal eureka platform
 * [Miscellaneous scripts](#miscellaneous-scripts)
   * [module-updater](#module-updater)
   * [arm-images-builder](#arm-images-builder)
+  * [Remove all docker volumes related to the deployment](#remove-all-docker-volumes-related-to-the-deployment)
+  * [Single command to deploy local environment](#single-command-to-deploy-local-environment)
   * [Verified versions](#verified-versions)
       * [Docker version](#docker-version)
       * [Docker-compose CLI version](#docker-compose-cli-version)
@@ -64,7 +66,7 @@ This variables can be overwritten in `.env.local.credentials`
 | MGR_APPLICATIONS_DB_PASSWORD           | mgr_applications_admin        | mgr-applications database password                                                             |
 | MGR_TENANTS_DB_PASSWORD                | mgr_tenants_admin             | mgr-tenants database password                                                                  |
 | MGR_TENANT_ENTITLEMENTS_DB_PASSWORD    | mgr_tenant_entitlements_admin | mgr-tenant-entitlements database password                                                      |
-| KC_ADMIN_PASSWORD                      | keycloak_system_admin         | Keycloak admin password                                                                        |
+| KC_ADMIN_PASSWORD                      | admin                         | Keycloak admin password                                                                        |
 | KC_ADMIN_CLIENT_SECRET                 | be-admin-client-secret        | Keycloak admin client secret                                                                   |
 
 > **_NOTE:_**  _It is recommended to generate your own set of credentials for a new deployment instead of using default
@@ -488,7 +490,7 @@ user=$(curl -X POST --silent \
       }
     }' \
   'http://localhost:8000/users-keycloak/users')
-  
+
 echo $user | jq
 ```
 
@@ -544,6 +546,28 @@ More: [ARM Images Builder](misc/arm-images-builder/README.md)
 
 ```bash
 ./misc/arm-image-builder/build.sh
+```
+
+## Remove all docker volumes related to the deployment
+Run the following command to remove all docker volumes related to the deployment:
+
+```shell
+./docker/remove-folio-platform-volumes.sh
+````
+
+## Single command to deploy local environment
+The script deploys local environment with default settings. Covered steps:
+- Start `core` services
+- Start `mgr-components`
+- Register `app-platform-minimal` application
+- Deploy `app-platform-minimal`
+- Create a `test` tenant
+- Enable `app-platform-minimal` application for tenant
+
+Run the following command to deploy local environment:
+
+```shell
+./start.sh
 ```
 
 ## Verified versions

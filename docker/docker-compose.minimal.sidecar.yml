@@ -21,6 +21,10 @@ x-sidecar-env: &sidecar-env
   SECRET_STORE_VAULT_ADDRESS: ${SECRET_STORE_VAULT_ADDRESS}
   SECRET_STORE_VAULT_TOKEN: ${SECRET_STORE_VAULT_TOKEN}
   WEB_CLIENT_TLS_VERIFY_HOSTNAME: false
+  ALLOW_CROSS_TENANT_REQUESTS: true
+  MOD_USERS_KEYCLOAK_URL: http://sc-users-keycloak:8081
+  SIDECAR_FORWARD_UNKNOWN_REQUESTS: true
+  SIDECAR_FORWARD_UNKNOWN_REQUESTS_DESTINATION: http://api-gateway:8000
 
 ###############################################
 ####---- app-platform-minimal sidecars ----####
