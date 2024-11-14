@@ -36,6 +36,8 @@ Provides docker-based minimal eureka platform
 * [Miscellaneous scripts](#miscellaneous-scripts)
   * [module-updater](#module-updater)
   * [arm-images-builder](#arm-images-builder)
+  * [Remove all docker volumes related to the deployment](#remove-all-docker-volumes-related-to-the-deployment)
+  * [Single command to deploy local environment](#single-command-to-deploy-local-environment)
   * [Verified versions](#verified-versions)
       * [Docker version](#docker-version)
       * [Docker-compose CLI version](#docker-compose-cli-version)
