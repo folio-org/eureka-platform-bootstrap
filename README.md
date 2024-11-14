@@ -546,6 +546,28 @@ More: [ARM Images Builder](misc/arm-images-builder/README.md)
 ./misc/arm-image-builder/build.sh
 ```
 
+## Remove all docker volumes related to the deployment
+Run the following command to remove all docker volumes related to the deployment:
+
+```shell
+./docker/remove-folio-platform-volumes.sh
+````
+
+## Single command to deploy local environment
+The script deploys local environment with default settings. Covered steps:
+- Start `core` services
+- Start `mgr-components`
+- Register `app-platform-minimal` application
+- Deploy `app-platform-minimal`
+- Create a `test` tenant
+- Enable `app-platform-minimal` application for tenant
+
+Run the following command to deploy local environment:
+
+```shell
+./start.sh
+```
+
 ## Verified versions
 
 #### Docker version
