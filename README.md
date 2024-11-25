@@ -35,7 +35,7 @@ Provides docker-based minimal eureka platform
   * [folio-module-sidecar](#folio-module-sidecar)
 * [Miscellaneous scripts](#miscellaneous-scripts)
   * [module-updater](#module-updater)
-  * [arm-images-builder](#arm-images-builder)
+  * [images-builder](#images-builder)
   * [Remove all docker volumes related to the deployment](#remove-all-docker-volumes-related-to-the-deployment)
   * [Single command to deploy local environment](#single-command-to-deploy-local-environment)
   * [Verified versions](#verified-versions)
@@ -540,12 +540,12 @@ to the [Application Descriptor](descriptors/app-platform-minimal/descriptor.json
 python ./misc/docker-module-updater/run.py
 ```
 
-## arm-images-builder
-Run the following command to build the ARM images from the `eureka-platform-bootstrap` folder:
-More: [ARM Images Builder](misc/arm-images-builder/README.md)
+## images-builder
+Run the following command to build the images for you current platform architecture from the `eureka-platform-bootstrap` folder:
+More: [Images Builder](misc/images-builder/README.md)
 
 ```bash
-./misc/arm-image-builder/build.sh
+./misc/image-builder/build.sh
 ```
 
 ## Remove all docker volumes related to the deployment
