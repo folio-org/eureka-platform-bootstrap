@@ -20,7 +20,10 @@ done
 # Clone and modify Dockerfile
 git clone $REPO_URL
 cd folio-tools/folio-java-docker/openjdk17
-sed -i '' "1s|.*|$NEW_LINE|" $DOCKERFILE_PATH
+
+# Portable sed command that works on both macOS and Ubuntu
+sed "1s|.*|$NEW_LINE|" "$DOCKERFILE_PATH" > "${DOCKERFILE_PATH}.tmp" && mv "${DOCKERFILE_PATH}.tmp" "$DOCKERFILE_PATH"
+
 docker build --no-cache -t $IMAGE_NAME .
 cd ../../..
 rm -rf $CLONE_DIR

@@ -1,75 +1,75 @@
 {
   "discovery": [
     {
-      "id": "mod-configuration-5.10.0",
+      "id": "mod-configuration-5.11.0",
       "name": "mod-configuration",
-      "version": "5.10.0",
+      "version": "5.11.0",
       "location": "http://sc-configuration:8081"
     },
     {
-      "id": "mod-permissions-6.5.0",
+      "id": "mod-permissions-6.6.0",
       "name": "mod-permissions",
-      "version": "6.5.0",
+      "version": "6.6.0",
       "location": "http://sc-permissions:8081"
     },
     {
-      "id": "mod-tags-2.2.0",
+      "id": "mod-tags-2.3.0",
       "name": "mod-tags",
-      "version": "2.2.0",
+      "version": "2.3.0",
       "location": "http://sc-tags:8081"
     },
     {
-      "id": "mod-users-19.3.1",
+      "id": "mod-users-19.4.0",
       "name": "mod-users",
-      "version": "19.3.1",
+      "version": "19.4.0",
       "location": "http://sc-users:8081"
     },
     {
-      "id": "mod-users-bl-7.8.0",
+      "id": "mod-users-bl-7.9.3",
       "name": "mod-users-bl",
-      "version": "7.8.0",
+      "version": "7.9.3",
       "location": "http://sc-users-bl:8081"
     },
     {
-      "id": "mod-password-validator-3.2.1",
+      "id": "mod-password-validator-3.3.0",
       "name": "mod-password-validator",
-      "version": "3.2.1",
+      "version": "3.3.0",
       "location": "http://sc-password-validator:8081"
     },
     {
-      "id": "mod-login-keycloak-1.5.1-SNAPSHOT.92",
+      "id": "mod-login-keycloak-2.1.0-SNAPSHOT.100",
       "name": "mod-login-keycloak",
-      "version": "1.5.1-SNAPSHOT.92",
+      "version": "2.1.0-SNAPSHOT.100",
       "location": "http://sc-login-keycloak:8081"
     },
     {
-      "id": "mod-users-keycloak-1.6.1-SNAPSHOT.101",
+      "id": "mod-users-keycloak-2.1.0-SNAPSHOT.110",
       "name": "mod-users-keycloak",
-      "version": "1.6.1-SNAPSHOT.101",
+      "version": "2.1.0-SNAPSHOT.110",
       "location": "http://sc-users-keycloak:8081"
     },
     {
-      "id": "mod-roles-keycloak-1.4.7-SNAPSHOT.142",
+      "id": "mod-roles-keycloak-2.1.0-SNAPSHOT.158",
       "name": "mod-roles-keycloak",
-      "version": "1.4.7-SNAPSHOT.142",
+      "version": "2.1.0-SNAPSHOT.158",
       "location": "http://sc-roles-keycloak:8081"
     },
     {
-      "id": "mod-notes-5.2.0",
+      "id": "mod-notes-6.0.0",
       "name": "mod-notes",
-      "version": "5.2.0",
+      "version": "6.0.0",
       "location": "http://sc-notes:8081"
     },
     {
-      "id": "mod-scheduler-1.3.1-SNAPSHOT.85",
+      "id": "mod-scheduler-2.1.0-SNAPSHOT.92",
       "name": "mod-scheduler",
-      "version": "1.3.1-SNAPSHOT.85",
+      "version": "2.1.0-SNAPSHOT.92",
       "location": "http://sc-scheduler:8081"
     },
     {
-      "id": "mod-settings-1.0.3",
+      "id": "mod-settings-1.1.0",
       "name": "mod-settings",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "location": "http://sc-settings:8081"
     }
   ]

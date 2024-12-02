@@ -141,7 +141,7 @@ echo "Additional Docker images built."
 
 # Generate local credentials and configuration
 echo "Generating local credentials and configuration..."
-sh ./set-default-local-credentials.sh
+bash ./set-default-local-credentials.sh
 echo "Local credentials and configuration generated."
 
 # Update module versions (optional)
