@@ -1,7 +1,7 @@
 Run the following command to build the images for your current platform from the `eureka-platform-bootstrap` folder:
 
 ```bash
-./misc/image-builder/build.sh
+./misc/images-builder/build.sh
 ```
 
 **Purpose:**

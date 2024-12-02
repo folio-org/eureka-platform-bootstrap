@@ -10,7 +10,7 @@ command_exists () {
 # Check for required tools
 echo "Checking installed tools..."
 
-REQUIRED_COMMANDS=("docker" "docker-compose" "java" "mvn" "jq" "curl")
+REQUIRED_COMMANDS=("docker" "docker-compose" "python3" "java" "mvn" "jq" "curl")
 
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
     if ! command_exists "$cmd"; then
@@ -32,6 +32,10 @@ echo "Docker version: $DOCKER_VERSION"
 DOCKER_COMPOSE_VERSION=$(docker compose version --short)
 echo "Docker Compose version: $DOCKER_COMPOSE_VERSION"
 
+# Python
+PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+echo "Python version: $PYTHON_VERSION"
+
 # Java
 JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
 echo "Java version: $JAVA_VERSION"
@@ -41,6 +45,7 @@ MAVEN_VERSION=$(mvn -version | head -n 1 | awk '{print $3}')
 echo "Maven version: $MAVEN_VERSION"
 
 # Check minimum versions
+REQUIRED_PYTHON="3.10"
 REQUIRED_JAVA="17"
 
 # Function to compare versions
@@ -49,6 +54,11 @@ version_ge() {
     # Returns 1 otherwise
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
 }
+
+if ! version_ge "$PYTHON_VERSION" "$REQUIRED_PYTHON"; then
+    echo "Error: Python version $REQUIRED_PYTHON or higher is required."
+    exit 1
+fi
 
 if [[ "${JAVA_VERSION%%.*}" -lt "$REQUIRED_JAVA" ]]; then
     echo "Error: Java version $REQUIRED_JAVA or higher is required."
@@ -133,6 +143,11 @@ echo "Additional Docker images built."
 echo "Generating local credentials and configuration..."
 bash ./set-default-local-credentials.sh
 echo "Local credentials and configuration generated."
+
+# Update module versions (optional)
+echo "Updating module versions..."
+python3 ../misc/docker-module-updater/run.py
+echo "Module versions updated."
 
 # Deploy core services
 echo "Deploying core services..."

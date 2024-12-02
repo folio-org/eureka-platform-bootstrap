@@ -545,7 +545,7 @@ Run the following command to build the images for you current platform architect
 More: [Images Builder](misc/images-builder/README.md)
 
 ```bash
-./misc/image-builder/build.sh
+./misc/images-builder/build.sh
 ```
 
 ## Remove all docker volumes related to the deployment
