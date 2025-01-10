@@ -234,7 +234,7 @@ Adding a new application to `mgr-applications` will require following steps:
 
 * To expose your pre-defined variables to current terminal
   ```shell
-  source .env.local
+  source .env.local.credentials
   ```
 
 * Get system access token:\
