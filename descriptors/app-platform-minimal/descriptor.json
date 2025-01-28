@@ -42,22 +42,22 @@
       "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-password-validator-3.3.0"
     },
     {
-      "id": "mod-login-keycloak-2.1.0-SNAPSHOT.100",
+      "id": "mod-login-keycloak-2.1.0-SNAPSHOT.106",
       "name": "mod-login-keycloak",
-      "version": "2.1.0-SNAPSHOT.100",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-login-keycloak-2.1.0-SNAPSHOT.100"
+      "version": "2.1.0-SNAPSHOT.106",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-login-keycloak-2.1.0-SNAPSHOT.106"
     },
     {
-      "id": "mod-users-keycloak-2.1.0-SNAPSHOT.110",
+      "id": "mod-users-keycloak-2.1.0-SNAPSHOT.120",
       "name": "mod-users-keycloak",
-      "version": "2.1.0-SNAPSHOT.110",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-keycloak-2.1.0-SNAPSHOT.110"
+      "version": "2.1.0-SNAPSHOT.120",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-keycloak-2.1.0-SNAPSHOT.120"
     },
     {
-      "id": "mod-roles-keycloak-2.1.0-SNAPSHOT.158",
+      "id": "mod-roles-keycloak-2.1.0-SNAPSHOT.172",
       "name": "mod-roles-keycloak",
-      "version": "2.1.0-SNAPSHOT.158",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-roles-keycloak-2.1.0-SNAPSHOT.158"
+      "version": "2.1.0-SNAPSHOT.172",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-roles-keycloak-2.1.0-SNAPSHOT.172"
     },
     {
       "id": "mod-notes-6.0.0",
@@ -66,10 +66,10 @@
       "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-notes-6.0.0"
     },
     {
-      "id": "mod-scheduler-2.1.0-SNAPSHOT.92",
+      "id": "mod-scheduler-2.1.0-SNAPSHOT.94",
       "name": "mod-scheduler",
-      "version": "2.1.0-SNAPSHOT.92",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-scheduler-2.1.0-SNAPSHOT.92"
+      "version": "2.1.0-SNAPSHOT.94",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-scheduler-2.1.0-SNAPSHOT.94"
     },
     {
       "id": "mod-settings-1.1.0",
