@@ -230,6 +230,14 @@ Executing this command will run containers for:
 ./start-docker-containers.sh -p mgr-components
 ```
 
+Wait until they are available:
+
+```shell
+curl -w"\n\n" -sS --retry-all-errors --retry 10 -D - http://localhost:9901/admin/health
+curl -w"\n\n" -sS --retry-all-errors --retry 8 -D - http://localhost:9902/admin/health
+curl -w"\n\n" -sS --retry-all-errors --retry 8 -D - http://localhost:9903/admin/health
+```
+
 Adding a new application to `mgr-applications` will require following steps:
 
 * To expose your pre-defined variables to current terminal
