@@ -275,7 +275,7 @@ curl -X POST --show-error --fail \
 # Register discovery information
 echo "Registering discovery information for app-platform-minimal..."
 
-curl -X POST --show-error --fail --show-error --fail \
+curl -X POST --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data "@../descriptors/app-platform-minimal/discovery.json" \
