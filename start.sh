@@ -137,7 +137,7 @@ echo "/etc/hosts file updated."
 
 # Build additional Docker images
 echo "Building additional Docker images..."
-sh ../misc/build-images.sh
+bash ../misc/build-images.sh
 echo "Additional Docker images built."
 
 # Generate local credentials and configuration
