@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -o pipefail
 set -e
 
 # Function to check if a command exists
@@ -144,10 +145,29 @@ echo "Generating local credentials and configuration..."
 bash ./set-default-local-credentials.sh
 echo "Local credentials and configuration generated."
 
-# Update module versions (optional)
+# Update module version in application descriptor
+read -p "Actualize module versions in application descriptor? (y/n): " ans
+  if [[ "$ans" =~ ^[Yy]$ ]]; then
+    python3 ../misc/module-version-actualizer.py
+  fi
+
+# Update module versions
 echo "Updating module versions..."
 python3 ../misc/docker-module-updater/run.py
 echo "Module versions updated."
+
+# Check architecture
+arch=$(uname -m)
+if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
+  read -p "ARM detected. Build ARM-compatible Docker images locally? (y/n): " ans
+  if [[ "$ans" =~ ^[Yy]$ ]]; then
+    cd ..
+    sh misc/images-builder/build.sh
+    cd docker
+  else
+    echo "Skipping building ARM-compatible Docker images."
+  fi
+fi
 
 # Deploy core services
 echo "Deploying core services..."
@@ -160,23 +180,24 @@ echo "Waiting for core services to start..."
 wait_for_service() {
     local url=$1
     local description=$2
-    local max_retries=30
-    local wait_seconds=5
-    local attempt=1
+    local max_time=120          # 2 minutes in seconds
+    local interval=5            # interval in seconds
+    local max_attempts=$((max_time / interval))
+    local attempt=0
 
-    echo "Waiting for $description to be available at $url..."
+    echo "Waiting for $description at $url (up to $max_time seconds)..."
 
     until curl -sSf "$url" > /dev/null; do
-        if [ $attempt -ge $max_retries ]; then
-            echo "Error: $description is not available at $url after $max_retries attempts."
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            echo "Error: $description not available at $url after $max_time seconds."
             exit 1
         fi
-        echo "Attempt $attempt/$max_retries: $description not available yet. Retrying in $wait_seconds seconds..."
-        sleep $wait_seconds
-        attempt=$((attempt + 1))
+        echo "Attempt $attempt/$max_attempts: $description not available. Retrying in $interval seconds..."
+        sleep $interval
     done
 
-    echo "$description is now available at $url."
+    echo "$description is available at $url."
 }
 
 # Define core services to wait for
@@ -227,7 +248,7 @@ echo "Obtaining system access token..."
 export KC_ADMIN_CLIENT_ID=be-admin-client
 export KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST --silent --fail \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
@@ -245,7 +266,7 @@ echo "System access token obtained."
 # Register application descriptor
 echo "Registering application descriptor for app-platform-minimal..."
 
-curl -X POST --silent \
+curl -X POST --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data "@../descriptors/app-platform-minimal/descriptor.json" \
@@ -254,7 +275,7 @@ curl -X POST --silent \
 # Register discovery information
 echo "Registering discovery information for app-platform-minimal..."
 
-curl -X POST --silent \
+curl -X POST --show-error --fail --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data "@../descriptors/app-platform-minimal/discovery.json" \
@@ -274,7 +295,7 @@ echo ""
 
 echo "app-platform-minimal application deployed."
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST --show-error --fail \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
@@ -289,7 +310,7 @@ fi
 
 # Create tenant
 echo "Creating tenant 'test'..."
-tenantResponse=$(curl -X POST --silent \
+tenantResponse=$(curl -X POST --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data '{"name": "test", "description": "Test Tenant"}' \
@@ -298,7 +319,7 @@ tenantResponse=$(curl -X POST --silent \
 echo "Tenant 'test' created: $tenantResponse"
 
 # Get tenant ID
-testTenantId=$(curl -X GET --silent \
+testTenantId=$(curl -X GET --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   "http://localhost:8000/tenants?query=name==test" | jq -r ".tenants[0].id")
@@ -310,7 +331,7 @@ fi
 
 echo "Tenant 'test' ID: $testTenantId"
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST --show-error --fail \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
@@ -326,7 +347,7 @@ fi
 # Enable (entitle) app-platform-minimal for tenant
 echo "Enabling (entitling) app-platform-minimal for tenant 'test'..."
 
-curl -X POST --silent \
+curl -X POST --show-error --fail \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "'"$(jq -r '.id' ../descriptors/app-platform-minimal/descriptor.json)"'" ] }' \

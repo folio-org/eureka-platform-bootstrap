@@ -25,6 +25,7 @@ x-sidecar-env: &sidecar-env
   MOD_USERS_KEYCLOAK_URL: http://sc-users-keycloak:8081
   SIDECAR_FORWARD_UNKNOWN_REQUESTS: true
   SIDECAR_FORWARD_UNKNOWN_REQUESTS_DESTINATION: http://api-gateway:8000
+  QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: 1
 
 ###############################################
 ####---- app-platform-minimal sidecars ----####
