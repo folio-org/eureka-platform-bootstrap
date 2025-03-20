@@ -162,7 +162,7 @@ if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
   read -p "ARM detected. Build ARM-compatible Docker images locally? (y/n): " ans
   if [[ "$ans" =~ ^[Yy]$ ]]; then
     cd ..
-    sh misc/images-builder/build.sh
+    bash misc/images-builder/build.sh
     cd docker
   else
     echo "Skipping building ARM-compatible Docker images."
