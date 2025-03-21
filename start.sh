@@ -186,11 +186,11 @@ wait_for_healthy() {
     spin_char="${spin:i++%${#spin}:1}"
     printf "\r[%c] Waiting for containers to become healthy..." "$spin_char"
 
-    sleep 0.2
+    sleep 1
   done
 
   echo -n "⏳ Waiting for routes and DNS to be ready "
-  countdown=5
+  countdown=10
   j=0
   while [ $countdown -gt 0 ]; do
     spin_char="${spin:j++%${#spin}:1}"
