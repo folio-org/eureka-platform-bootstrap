@@ -5,10 +5,7 @@ x-core-service: &mgmt-service
     resources:
       limits:
         cpus: 1.0
-        memory: 512m
-      reservations:
-        cpus: 1.0
-        memory: 256M
+        memory: 600m
   depends_on:
     db:
       condition: service_healthy
