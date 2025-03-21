@@ -6,6 +6,11 @@ x-keycloak-service: &keycloak-service
   depends_on:
     db:
       condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
+    interval: 30s
+    timeout: 5s
+    retries: 20
   deploy:
     resources:
       limits:
@@ -33,11 +38,19 @@ services:
     restart: on-failure
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
+      keycloak-s0:
+        condition: service_healthy
     volumes:
       - ./nginx/keycloak-nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://keycloak:8080/realms/master || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 15
+
 
   keycloak-s0:
     <<: *keycloak-service
