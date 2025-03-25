@@ -8,7 +8,7 @@ APP_DESCRIPTOR_PATH = os.path.join(SCRIPT_DIR,
                                    "../descriptors/app-platform-minimal/descriptor.json")
 
 use_pre_release = input(
-  "Use latest SNAPSHOT versions (if `no` latest release version will be userd)? (y/n): ").strip().lower()
+  "Use latest SNAPSHOT versions (if `no` latest release versions will be used)? (y/n): ").strip().lower()
 pre_release = "true" if use_pre_release in ("y", "yes") else "false"
 
 
