@@ -37,6 +37,7 @@ Provides docker-based minimal eureka platform
   * [module-updater](#module-updater)
   * [images-builder](#images-builder)
   * [Remove all docker volumes related to the deployment](#remove-all-docker-volumes-related-to-the-deployment)
+  * [Module version actualizer](#module-version-actualizer)
   * [Single command to deploy local environment](#single-command-to-deploy-local-environment)
   * [Verified versions](#verified-versions)
       * [Docker version](#docker-version)
@@ -562,6 +563,13 @@ Run the following command to remove all docker volumes related to the deployment
 ```shell
 ./docker/remove-folio-platform-volumes.sh
 ````
+
+## Module version actualizer
+This script updates module versions in the application descriptor (descriptor.json) to the latest SNAPSHOT or release versions available in the FOLIO Registry.
+Choose whether to use SNAPSHOT versions (y) or stable releases (n).
+```shell
+python3 misc/module-version-actualizer/run.py
+```
 
 ## Single command to deploy local environment
 The script deploys local environment with default settings. Covered steps:

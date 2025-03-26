@@ -1,6 +1,18 @@
 x-sidecar-module: &sidecar-module
   image: ${FOLIO_MODULE_SIDECAR_REPOSITORY}:${FOLIO_MODULE_SIDECAR_VERSION}
   networks: [ fpm-net ]
+  healthcheck:
+    test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/admin/health || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 10
+  depends_on:
+    mgr-applications:
+      condition: service_healthy
+    mgr-tenants:
+      condition: service_healthy
+    keycloak:
+      condition: service_healthy
   deploy:
     resources:
       limits:
@@ -25,6 +37,7 @@ x-sidecar-env: &sidecar-env
   MOD_USERS_KEYCLOAK_URL: http://sc-users-keycloak:8081
   SIDECAR_FORWARD_UNKNOWN_REQUESTS: true
   SIDECAR_FORWARD_UNKNOWN_REQUESTS_DESTINATION: http://api-gateway:8000
+  QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: 1
 
 ###############################################
 ####---- app-platform-minimal sidecars ----####

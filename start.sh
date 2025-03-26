@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -o pipefail
 set -e
 
 # Function to check if a command exists
@@ -136,7 +137,7 @@ echo "/etc/hosts file updated."
 
 # Build additional Docker images
 echo "Building additional Docker images..."
-sh ../misc/build-images.sh
+bash ../misc/build-images.sh
 echo "Additional Docker images built."
 
 # Generate local credentials and configuration
@@ -144,51 +145,68 @@ echo "Generating local credentials and configuration..."
 bash ./set-default-local-credentials.sh
 echo "Local credentials and configuration generated."
 
-# Update module versions (optional)
+# Update module version in application descriptor
+read -p "Actualize module versions in application descriptor? (y/n): " ans
+  if [[ "$ans" =~ ^[Yy]$ ]]; then
+    python3 ../misc/module-version-actualizer.py
+  fi
+
+# Update module versions
 echo "Updating module versions..."
 python3 ../misc/docker-module-updater/run.py
 echo "Module versions updated."
+
+# Check architecture
+arch=$(uname -m)
+if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
+  read -p "ARM detected. Build ARM-compatible Docker images locally? (y/n): " ans
+  if [[ "$ans" =~ ^[Yy]$ ]]; then
+    cd ..
+    bash misc/images-builder/build.sh
+    cd docker
+  else
+    echo "Skipping building ARM-compatible Docker images."
+  fi
+fi
+
+wait_for_healthy() {
+  echo "⏳ Waiting for all containers with healthcheck to become healthy..."
+
+  spin='-\|/'
+  i=0
+
+  while true; do
+    unhealthy=$(docker ps -q | xargs -r docker inspect --format '{{.State.Health.Status}}' 2>/dev/null | grep -Ev 'healthy$|<no value>' || true)
+
+    if [ -z "$unhealthy" ]; then
+      printf "\r✅ All containers with healthcheck are healthy          \n"
+      break
+    fi
+
+    spin_char="${spin:i++%${#spin}:1}"
+    printf "\r[%c] Waiting for containers to become healthy..." "$spin_char"
+
+    sleep 1
+  done
+
+  echo -n "⏳ Waiting for routes and DNS to be ready "
+  countdown=10
+  j=0
+  while [ $countdown -gt 0 ]; do
+    spin_char="${spin:j++%${#spin}:1}"
+    printf "\r[%c] Waiting for routes and DNS to be ready... [%d]" "$spin_char" "$countdown"
+    sleep 1
+    countdown=$((countdown - 1))
+  done
+
+  echo -e "\r✅ Routes and DNS should be ready now                \n"
+}
 
 # Deploy core services
 echo "Deploying core services..."
 ./start-docker-containers.sh -p core
 
-# Wait for core services to start
-echo "Waiting for core services to start..."
-
-# Function to wait for a service to be available with retries
-wait_for_service() {
-    local url=$1
-    local description=$2
-    local max_retries=30
-    local wait_seconds=5
-    local attempt=1
-
-    echo "Waiting for $description to be available at $url..."
-
-    until curl -sSf "$url" > /dev/null; do
-        if [ $attempt -ge $max_retries ]; then
-            echo "Error: $description is not available at $url after $max_retries attempts."
-            exit 1
-        fi
-        echo "Attempt $attempt/$max_retries: $description not available yet. Retrying in $wait_seconds seconds..."
-        sleep $wait_seconds
-        attempt=$((attempt + 1))
-    done
-
-    echo "$description is now available at $url."
-}
-
-# Define core services to wait for
-CORE_SERVICES_NAMES=("Keycloak" "Kong Manager" "Kafka UI" "Vault")
-CORE_SERVICES_URLS=("http://localhost:8080" "http://localhost:8002" "http://localhost:9080" "http://localhost:8200/")
-
-# Iterate over core services and wait for each to be available
-for i in "${!CORE_SERVICES_NAMES[@]}"; do
-    wait_for_service "${CORE_SERVICES_URLS[$i]}" "${CORE_SERVICES_NAMES[$i]}"
-done
-
-echo "All core services are up and running."
+wait_for_healthy
 
 # Deploy mgr-components
 echo "Deploying mgr-components..."
@@ -198,42 +216,21 @@ sh ./misc/populate-vault-token.sh
 
 ./start-docker-containers.sh -p mgr-components
 
+wait_for_healthy
+
 echo "mgr-components deployed."
 
-# Wait for mgr-components to start
-echo "Waiting for mgr-components to start..."
-
-# Define mgr-components services to wait for using provided URLs
-MGR_COMPONENTS_NAMES=("mgr-tenants" "mgr-applications" "mgr-tenant-entitlements")
-MGR_COMPONENTS_URLS=("http://localhost:9902/admin/health" "http://localhost:9901/admin/health" "http://localhost:9903/admin/health")
-
-# Iterate over mgr-components services and wait for each to be available
-for i in "${!MGR_COMPONENTS_NAMES[@]}"; do
-    wait_for_service "${MGR_COMPONENTS_URLS[$i]}" "${MGR_COMPONENTS_NAMES[$i]}"
-done
-
-echo "All mgr-components services are up and running."
-
-for ((i=25; i>0; i--)); do
-  printf "\rWaiting for %2d seconds..." "$i"
-  sleep 1
-done
-echo ""
-
-
-# Obtain system access token
 echo "Obtaining system access token..."
 
 export KC_ADMIN_CLIENT_ID=be-admin-client
 export KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST --silent --fail \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
     --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
     "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
-
 
 if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
     echo "Error: Failed to obtain system access token."
@@ -245,20 +242,48 @@ echo "System access token obtained."
 # Register application descriptor
 echo "Registering application descriptor for app-platform-minimal..."
 
-curl -X POST --silent \
+response=$(curl -sS -w "\n%{http_code}" -X POST \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data "@../descriptors/app-platform-minimal/descriptor.json" \
-  "http://localhost:8000/applications" | jq
+  "http://localhost:8000/applications")
+
+body=$(echo "$response" | sed '$d')
+code=$(echo "$response" | tail -n1)
+
+if [ "$code" -eq 409 ]; then
+  echo "$body" | jq
+  echo "Skipping this error."
+elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+  echo "$body" | jq
+else
+  echo "Request failed with HTTP code $code:"
+  echo "$body" | jq
+  exit 1
+fi
 
 # Register discovery information
 echo "Registering discovery information for app-platform-minimal..."
 
-curl -X POST --silent \
+response=$(curl -s -w "\n%{http_code}" -X POST \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data "@../descriptors/app-platform-minimal/discovery.json" \
-  "http://localhost:8000/modules/discovery" | jq
+  "http://localhost:8000/modules/discovery")
+
+body=$(echo "$response" | sed '$d')
+code=$(echo "$response" | tail -n1)
+
+if [ "$code" -eq 409 ]; then
+  echo "$body" | jq
+  echo "Skipping this error."
+elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+  echo "$body" | jq
+else
+  echo "Request failed with HTTP code $code:"
+  echo "$body" | jq
+  exit 1
+fi
 
 echo "Application descriptor and discovery information registered."
 
@@ -266,21 +291,18 @@ echo "Application descriptor and discovery information registered."
 echo "Deploying app-platform-minimal application..."
 ./start-docker-containers.sh -p app-platform-minimal
 
-for ((i=120; i>0; i--)); do
-  printf "\rWaiting for %2d seconds..." "$i"
-  sleep 1
-done
+wait_for_healthy
+
 echo ""
 
 echo "app-platform-minimal application deployed."
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST -s \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
     --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
     "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
-
 
 if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
     echo "Error: Failed to obtain system access token."
@@ -289,16 +311,30 @@ fi
 
 # Create tenant
 echo "Creating tenant 'test'..."
-tenantResponse=$(curl -X POST --silent \
+
+response=$(curl -s -w "\n%{http_code}" -X POST \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data '{"name": "test", "description": "Test Tenant"}' \
-  "http://localhost:8000/tenants" | jq)
+  "http://localhost:8000/tenants")
 
-echo "Tenant 'test' created: $tenantResponse"
+body=$(echo "$response" | sed '$d')
+code=$(echo "$response" | tail -n1)
+
+if [ "$code" -ge 400 ] && [ "$code" -lt 500 ]; then
+  echo "$body" | jq
+  echo "Skipping this error."
+elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+  echo "Tenant 'test' created:"
+  echo "$body" | jq
+else
+  echo "Tenant creation failed with HTTP code $code:"
+  echo "$body" | jq
+  exit 1
+fi
 
 # Get tenant ID
-testTenantId=$(curl -X GET --silent \
+testTenantId=$(curl -X GET -s \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   "http://localhost:8000/tenants?query=name==test" | jq -r ".tenants[0].id")
@@ -310,28 +346,39 @@ fi
 
 echo "Tenant 'test' ID: $testTenantId"
 
-systemAccessToken=$(curl -X POST --silent \
+systemAccessToken=$(curl -X POST -s \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
     --data-urlencode "grant_type=client_credentials" \
     --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
     "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
 
-
 if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
     echo "Error: Failed to obtain system access token."
     exit 1
 fi
 
-# Enable (entitle) app-platform-minimal for tenant
 echo "Enabling (entitling) app-platform-minimal for tenant 'test'..."
 
-curl -X POST --silent \
+response=$(curl -s -w "\n%{http_code}" -X POST \
   --header "Content-Type: application/json" \
   --header "x-okapi-token: ${systemAccessToken}" \
   --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "'"$(jq -r '.id' ../descriptors/app-platform-minimal/descriptor.json)"'" ] }' \
-  "http://localhost:8000/entitlements?ignoreErrors=true" | jq
+  "http://localhost:8000/entitlements?ignoreErrors=true")
 
-echo "Application enabled for tenant."
+body=$(echo "$response" | sed '$d')
+code=$(echo "$response" | tail -n1)
+
+if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+  echo "Application enabled for tenant."
+  echo "$body" | jq
+elif [ "$code" -eq 400 ]; then
+  echo "$body" | jq
+  echo "Skipping this error."
+else
+  echo "Failed to enable application (HTTP $code):"
+  echo "$body" | jq
+  exit 1
+fi
 
 echo "Deployment completed successfully!"

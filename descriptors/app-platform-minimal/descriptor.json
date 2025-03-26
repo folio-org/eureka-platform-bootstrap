@@ -6,70 +6,70 @@
   "platform": "base",
   "modules": [
     {
-      "id": "mod-configuration-5.11.0",
+      "id": "mod-configuration-5.12.0",
       "name": "mod-configuration",
-      "version": "5.11.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-configuration-5.11.0"
+      "version": "5.12.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-configuration-5.12.0"
     },
     {
-      "id": "mod-permissions-6.6.0",
+      "id": "mod-permissions-6.7.0",
       "name": "mod-permissions",
-      "version": "6.6.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-permissions-6.6.0"
+      "version": "6.7.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-permissions-6.7.0"
     },
     {
-      "id": "mod-tags-2.3.0",
+      "id": "mod-tags-2.4.0",
       "name": "mod-tags",
-      "version": "2.3.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-tags-2.3.0"
+      "version": "2.4.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-tags-2.4.0"
     },
     {
-      "id": "mod-users-19.4.0",
+      "id": "mod-users-19.5.0",
       "name": "mod-users",
-      "version": "19.4.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-19.4.0"
+      "version": "19.5.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-19.5.0"
     },
     {
-      "id": "mod-users-bl-7.9.3",
+      "id": "mod-users-bl-7.10.0",
       "name": "mod-users-bl",
-      "version": "7.9.3",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-bl-7.9.3"
+      "version": "7.10.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-bl-7.10.0"
     },
     {
-      "id": "mod-password-validator-3.3.0",
+      "id": "mod-password-validator-3.4.0",
       "name": "mod-password-validator",
-      "version": "3.3.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-password-validator-3.3.0"
+      "version": "3.4.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-password-validator-3.4.0"
     },
     {
-      "id": "mod-login-keycloak-2.1.0-SNAPSHOT.106",
+      "id": "mod-login-keycloak-3.0.0",
       "name": "mod-login-keycloak",
-      "version": "2.1.0-SNAPSHOT.106",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-login-keycloak-2.1.0-SNAPSHOT.106"
+      "version": "3.0.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-login-keycloak-3.0.0"
     },
     {
-      "id": "mod-users-keycloak-2.1.0-SNAPSHOT.120",
+      "id": "mod-users-keycloak-3.0.0",
       "name": "mod-users-keycloak",
-      "version": "2.1.0-SNAPSHOT.120",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-keycloak-2.1.0-SNAPSHOT.120"
+      "version": "3.0.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-users-keycloak-3.0.0"
     },
     {
-      "id": "mod-roles-keycloak-2.1.0-SNAPSHOT.172",
+      "id": "mod-roles-keycloak-3.0.0",
       "name": "mod-roles-keycloak",
-      "version": "2.1.0-SNAPSHOT.172",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-roles-keycloak-2.1.0-SNAPSHOT.172"
+      "version": "3.0.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-roles-keycloak-3.0.0"
     },
     {
-      "id": "mod-notes-6.0.0",
+      "id": "mod-notes-7.0.0",
       "name": "mod-notes",
-      "version": "6.0.0",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-notes-6.0.0"
+      "version": "7.0.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-notes-7.0.0"
     },
     {
-      "id": "mod-scheduler-2.1.0-SNAPSHOT.94",
+      "id": "mod-scheduler-3.0.0",
       "name": "mod-scheduler",
-      "version": "2.1.0-SNAPSHOT.94",
-      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-scheduler-2.1.0-SNAPSHOT.94"
+      "version": "3.0.0",
+      "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-scheduler-3.0.0"
     },
     {
       "id": "mod-settings-1.1.0",
@@ -78,8 +78,8 @@
       "url": "https://folio-registry.dev.folio.org/_/proxy/modules/mod-settings-1.1.0"
     }
   ],
-  "uiModules": [ ],
-  "dependencies": [ ],
-  "moduleDescriptors": [ ],
-  "uiModuleDescriptors": [ ]
+  "uiModules": [],
+  "dependencies": [],
+  "moduleDescriptors": [],
+  "uiModuleDescriptors": []
 }
