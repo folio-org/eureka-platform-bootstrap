@@ -113,6 +113,16 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_JMXPORT: 9997
 
+  perf-wiremock-server:
+    image: wiremock/wiremock:3.10.0
+    networks: [ fpm-net ]
+    container_name: perf-wiremock-server
+    profiles: [ sc-performance ]
+    ports:
+      - "25000:8080"
+    volumes:
+      - ./wiremock:/home/wiremock/mappings
+
 networks:
   fpm-net:
     name: folio-platform-minimal

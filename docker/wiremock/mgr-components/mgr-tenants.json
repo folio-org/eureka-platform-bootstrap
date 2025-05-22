@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/tenants?.*",
+    "headers": {
+      "Content-Type": {
+        "equalTo": "application/json"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "totalRecords": 1,
+      "tenants": [
+        {
+          "id": "90b113f0-4e98-45f7-bccc-cf318e13a9bc",
+          "name": "root",
+          "description": "test description"
+        }
+      ]
+    }
+  }
+}

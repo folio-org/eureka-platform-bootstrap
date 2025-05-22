@@ -158,3 +158,22 @@ services:
         -Djdk.internal.httpclient.disableHostnameVerification=true
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
         -XX:MaxRAMPercentage=70.0
+
+  mod-mock-server:
+    <<: *okapi-module
+    deploy:
+      resources:
+        limits:
+          cpus: 1.0
+          memory: 200m
+        reservations:
+          memory: 200m
+          cpus: 1.0
+    profiles: [ sc-performance ]
+    container_name: mod-mock-server
+    image: quarkus/mock-http-server:latest
+    ports:
+      - "9021:8081"
+    environment:
+      RESPONSE_DELAY_LOWER_BOUND: 200
+      RESPONSE_DELAY_UPPER_BOUND: 201

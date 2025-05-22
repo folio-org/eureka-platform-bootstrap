@@ -1,0 +1,3952 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/modules/mod-bulk-operations-2.2.0-SNAPSHOT.348",
+    "headers": {
+      "Content-Type": {
+        "equalTo": "application/json"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "module": {
+        "moduleId": "mod-bulk-operations-2.2.0-SNAPSHOT.348",
+        "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+        "location": "http://mod-mock-server:8081",
+        "interfaces": [
+          {
+            "id": "bulk-operations",
+            "version": "1.5",
+            "endpoints": [
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/upload",
+                "permissionsRequired": [
+                  "bulk-operations.item.upload.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/query",
+                "permissionsRequired": [
+                  "bulk-operations.item.query.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/content-update",
+                "permissionsRequired": [
+                  "bulk-operations.item.content-update.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/marc-content-update",
+                "permissionsRequired": [
+                  "bulk-operations.item.marc-content-update.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/preview",
+                "permissionsRequired": [
+                  "bulk-operations.item.preview.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/preview/download",
+                "permissionsRequired": [
+                  "bulk-operations.item.preview.download.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/start",
+                "permissionsRequired": [
+                  "bulk-operations.item.start.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/errors",
+                "permissionsRequired": [
+                  "bulk-operations.item.errors.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/errors/download",
+                "permissionsRequired": [
+                  "bulk-operations.item.errors.download.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations",
+                "permissionsRequired": [
+                  "bulk-operations.collection.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}",
+                "permissionsRequired": [
+                  "bulk-operations.item.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/download",
+                "permissionsRequired": [
+                  "bulk-operations.download.item.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/list-users",
+                "permissionsRequired": [
+                  "bulk-operations.list-users.collection.get"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "DELETE"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/files/{fileName}",
+                "permissionsRequired": [
+                  "bulk-operations.files.item.delete"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/{operationId}/cancel",
+                "permissionsRequired": [
+                  "bulk-operations.item.cancel.post"
+                ],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "pathPattern": "/bulk-operations/used-tenants/{operationId}",
+                "permissionsRequired": [
+                  "bulk-operations.used.tenants.get"
+                ],
+                "permissionsDesired": []
+              }
+            ]
+          },
+          {
+            "id": "_tenant",
+            "version": "2.0",
+            "interfaceType": "system",
+            "endpoints": [
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/_/tenant",
+                "permissionsRequired": [],
+                "permissionsDesired": []
+              },
+              {
+                "methods": [
+                  "GET",
+                  "DELETE"
+                ],
+                "pathPattern": "/_/tenant/{id}",
+                "permissionsRequired": [],
+                "permissionsDesired": []
+              }
+            ]
+          },
+          {
+            "id": "_timer",
+            "version": "1.0",
+            "interfaceType": "system",
+            "endpoints": [
+              {
+                "methods": [
+                  "POST"
+                ],
+                "pathPattern": "/bulk-operations/clean-up-log-files",
+                "permissionsRequired": [],
+                "permissionsDesired": []
+              }
+            ]
+          }
+        ]
+      },
+      "requiredModules": [
+        {
+          "moduleId": "mod-data-export-worker-3.4.0-SNAPSHOT.571",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "bulk-edit",
+              "version": "4.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/bulk-edit/{id}/upload",
+                  "permissionsRequired": [
+                    "bulk-edit.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/bulk-edit/{id}/start",
+                  "permissionsRequired": [
+                    "bulk-edit.start.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/bulk-edit/{jobId}/errors",
+                  "permissionsRequired": [
+                    "bulk-edit.errors.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/refresh-presigned-url",
+                  "permissionsRequired": [
+                    "refresh-presigned-url.get"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-inventory-21.1.0-SNAPSHOT.827",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "inventory",
+              "version": "14.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/inventory/items",
+                  "permissionsRequired": [
+                    "inventory.items.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/inventory/items/{id}",
+                  "permissionsRequired": [
+                    "inventory.items.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-withdrawn",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-withdrawn.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-in-process",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-in-process.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-in-process-non-requestable",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-in-process-non-requestable.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-intellectual-item",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-intellectual-item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-long-missing",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-long-missing.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-missing",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-missing.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-restricted",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-restricted.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-unavailable",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-unavailable.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items/{id}/mark-unknown",
+                  "permissionsRequired": [
+                    "inventory.items.item.mark-unknown.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/items",
+                  "permissionsRequired": [
+                    "inventory.items.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/inventory/items/{id}",
+                  "permissionsRequired": [
+                    "inventory.items.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/inventory/items/{id}",
+                  "permissionsRequired": [
+                    "inventory.items.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/inventory/items",
+                  "permissionsRequired": [
+                    "inventory.items.collection.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/inventory/holdings/{id}",
+                  "permissionsRequired": [
+                    "inventory.holdings.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/inventory/instances",
+                  "permissionsRequired": [
+                    "inventory.instances.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/inventory/items-by-holdings-id",
+                  "permissionsRequired": [
+                    "inventory.items-by-holdings-id.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/tenant-items",
+                  "permissionsRequired": [
+                    "inventory.tenant-items.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/inventory/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory.instances.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/inventory/instances",
+                  "permissionsRequired": [
+                    "inventory.instances.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/inventory/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory.instances.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/inventory/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory.instances.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/inventory/instances",
+                  "permissionsRequired": [
+                    "inventory.instances.collection.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/inventory/instances/{id}/mark-deleted",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-data-import-3.3.0-SNAPSHOT.320",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "data-import",
+              "version": "3.2",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/splitStatus",
+                  "permissionsRequired": [
+                    "data-import.splitconfig.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions",
+                  "permissionsRequired": [
+                    "data-import.uploaddefinitions.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions",
+                  "permissionsRequired": [
+                    "data-import.uploadDefinitions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}",
+                  "permissionsRequired": [
+                    "data-import.uploadDefinitions.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}",
+                  "permissionsRequired": [
+                    "data-import.uploaddefinitions.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}",
+                  "permissionsRequired": [
+                    "data-import.uploaddefinitions.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}/files/{fileId}",
+                  "permissionsRequired": [
+                    "data-import.upload.file.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}/files",
+                  "permissionsRequired": [
+                    "data-import.uploadDefinitions.files.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}/files/{fileId}/assembleStorageFile",
+                  "permissionsRequired": [
+                    "data-import.assembleStorageFile.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}/files/{fileId}",
+                  "permissionsRequired": [
+                    "data-import.uploaddefinitions.files.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/uploadDefinitions/{uploadDefinitionId}/processFiles",
+                  "permissionsRequired": [
+                    "data-import.uploadDefinitions.processFiles.item.post"
+                  ],
+                  "permissionsDesired": [
+                    "invoices.acquisitions-units-assignments.assign",
+                    "orders.acquisitions-units-assignments.assign",
+                    "orders.acquisitions-units-assignments.manage",
+                    "orders.item.approve",
+                    "orders.item.reopen",
+                    "orders.item.unopen"
+                  ]
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions/{id}",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions/{id}",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions/{id}",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import/fileExtensions/restore/default",
+                  "permissionsRequired": [
+                    "data-import.fileExtensions.default.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/dataTypes",
+                  "permissionsRequired": [
+                    "data-import.datatypes.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/uploadUrl",
+                  "permissionsRequired": [
+                    "data-import.uploadUrl.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/uploadUrl/subsequent",
+                  "permissionsRequired": [
+                    "data-import.uploadUrl.subsequent.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/jobExecutions/{id}/downloadUrl",
+                  "permissionsRequired": [
+                    "data-import.downloadUrl.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import/jobExecutions/{jobExecutionId}/cancel",
+                  "permissionsRequired": [
+                    "data-import.jobexecution.cancel"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import/testFileSplit",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-permissions-6.7.0-SNAPSHOT.188",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "permissions",
+              "version": "5.8",
+              "endpoints": [
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/perms/users*",
+                  "permissionsRequired": [
+                    "perms.users.item.post"
+                  ],
+                  "permissionsDesired": [
+                    "perms.users.assign.okapi",
+                    "perms.users.assign.immutable",
+                    "perms.users.assign.mutable"
+                  ]
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/perms/users*",
+                  "permissionsRequired": [
+                    "perms.users.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/perms/users/{id}",
+                  "permissionsRequired": [
+                    "perms.users.item.put"
+                  ],
+                  "permissionsDesired": [
+                    "perms.users.assign.okapi",
+                    "perms.users.assign.immutable",
+                    "perms.users.assign.mutable"
+                  ]
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/perms/users/{id}",
+                  "permissionsRequired": [
+                    "perms.users.item.id.delete"
+                  ],
+                  "permissionsDesired": [
+                    "perms.users.assign.okapi",
+                    "perms.users.assign.immutable",
+                    "perms.users.assign.mutable"
+                  ]
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/perms/users/{id}/permissions/{perm}",
+                  "permissionsRequired": [
+                    "perms.users.item.perm.delete"
+                  ],
+                  "permissionsDesired": [
+                    "perms.users.assign.okapi",
+                    "perms.users.assign.immutable",
+                    "perms.users.assign.mutable"
+                  ]
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/perms/permissions",
+                  "permissionsRequired": [
+                    "perms.permissions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/perms/permissions/{id}",
+                  "permissionsRequired": [
+                    "perms.permissions.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/perms/permissions/{id}",
+                  "permissionsRequired": [
+                    "perms.permissions.item.put"
+                  ],
+                  "permissionsDesired": [
+                    "perms.users.assign.okapi",
+                    "perms.users.assign.immutable",
+                    "perms.users.assign.mutable"
+                  ]
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/perms/permissions",
+                  "permissionsRequired": [
+                    "perms.permissions.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/perms/permissions/{id}",
+                  "permissionsRequired": [
+                    "perms.permissions.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/perms/purge-deprecated",
+                  "permissionsRequired": [
+                    "perms.permissions.purge-deprecated.post"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-search-4.1.0-SNAPSHOT.645",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "consortium-search",
+              "version": "2.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/holdings",
+                  "permissionsRequired": [
+                    "consortium-search.holdings.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/items",
+                  "permissionsRequired": [
+                    "consortium-search.items.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/locations",
+                  "permissionsRequired": [
+                    "consortium-search.locations.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/campuses",
+                  "permissionsRequired": [
+                    "consortium-search.campuses.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/libraries",
+                  "permissionsRequired": [
+                    "consortium-search.libraries.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/institutions",
+                  "permissionsRequired": [
+                    "consortium-search.institutions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/holding/{id}",
+                  "permissionsRequired": [
+                    "consortium-search.holdings.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/search/consortium/item/{id}",
+                  "permissionsRequired": [
+                    "consortium-search.items.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/search/consortium/batch/items",
+                  "permissionsRequired": [
+                    "consortium-search.items.batch.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/search/consortium/batch/holdings",
+                  "permissionsRequired": [
+                    "consortium-search.holdings.batch.collection.get"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-data-export-spring-3.5.0-SNAPSHOT.293",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "data-export-spring",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs",
+                  "permissionsRequired": [
+                    "data-export.job.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs/{id}",
+                  "permissionsRequired": [
+                    "data-export.job.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs",
+                  "permissionsRequired": [
+                    "data-export.job.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs/{id}/download",
+                  "permissionsRequired": [
+                    "data-export.job.item.download"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs/{id}/resend",
+                  "permissionsRequired": [
+                    "data-export.job.item.resend"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-export-spring/configs",
+                  "permissionsRequired": [
+                    "data-export.config.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-export-spring/configs/{id}",
+                  "permissionsRequired": [
+                    "data-export.config.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-export-spring/configs",
+                  "permissionsRequired": [
+                    "data-export.config.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-export-spring/configs/{id}",
+                  "permissionsRequired": [
+                    "data-export.config.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-export-spring/configs/{id}",
+                  "permissionsRequired": [
+                    "data-export.config.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-export-spring/jobs/send",
+                  "permissionsRequired": [
+                    "data-export.job.send.item.execute"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-users-keycloak-2.1.0-SNAPSHOT.119",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "users-keycloak",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/users/{id}",
+                  "permissionsRequired": [
+                    "users-keycloak.item.get"
+                  ],
+                  "permissionsDesired": [
+                    "users-keycloak.read.basic",
+                    "users-keycloak.read.restricted"
+                  ]
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/users",
+                  "permissionsRequired": [
+                    "users-keycloak.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/users",
+                  "permissionsRequired": [
+                    "users-keycloak.collection.get"
+                  ],
+                  "permissionsDesired": [
+                    "users-keycloak.read.basic",
+                    "users-keycloak.read.restricted"
+                  ]
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/users-keycloak/users/{id}",
+                  "permissionsRequired": [
+                    "users-keycloak.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/users-keycloak/users/{id}",
+                  "permissionsRequired": [
+                    "users-keycloak.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/_self",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/migrations",
+                  "permissionsRequired": [
+                    "users-keycloak.migrations.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/migrations",
+                  "permissionsRequired": [
+                    "users-keycloak.migrations.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/migrations/{id}",
+                  "permissionsRequired": [
+                    "users-keycloak.migrations.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/users-keycloak/migrations/{id}",
+                  "permissionsRequired": [
+                    "users-keycloak.migrations.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/forgotten/password",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/forgotten/username",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/password-reset/link",
+                  "permissionsRequired": [
+                    "users-keycloak.password-reset-link.generate"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/password-reset/reset",
+                  "permissionsRequired": [
+                    "users-keycloak.password-reset-link.reset"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/password-reset/validate",
+                  "permissionsRequired": [
+                    "users-keycloak.password-reset-link.validate"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/users/{id}/permissions",
+                  "permissionsRequired": [
+                    "users-keycloak.users.permissions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users-keycloak/auth-users/{userId}",
+                  "permissionsRequired": [
+                    "users-keycloak.auth-users.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users-keycloak/auth-users/{userId}",
+                  "permissionsRequired": [
+                    "users-keycloak.auth-users.item.post"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-inventory-storage-28.1.0-SNAPSHOT.1064",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "holdings-storage",
+              "version": "8.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings/retrieve",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.retrieve.collection.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/holdings-storage/holdings",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings.collection.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "instance-storage",
+              "version": "11.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-storage/instances",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-storage/instances/retrieve",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.retrieve.collection.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-storage/instances",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}/source-record",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.source-record.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}/source-record/marc-json",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.source-record.marc-json.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}/source-record/marc-json",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.source-record.marc-json.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-storage/instances/{id}/source-record/marc-json",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.source-record.marc-json.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-storage/instances",
+                  "permissionsRequired": [
+                    "inventory-storage.instances.collection.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-storage/instance-relationships",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-relationships.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-storage/instance-relationships",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-relationships.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-storage/instance-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-relationships.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-storage/instance-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-relationships.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-storage/instance-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-relationships.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "locations",
+              "version": "3.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/locations",
+                  "permissionsRequired": [
+                    "inventory-storage.locations.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/locations/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.locations.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/locations",
+                  "permissionsRequired": [
+                    "inventory-storage.locations.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/locations/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.locations.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/locations/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.locations.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "contributor-types",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/contributor-types",
+                  "permissionsRequired": [
+                    "inventory-storage.contributor-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/contributor-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.contributor-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/contributor-types",
+                  "permissionsRequired": [
+                    "inventory-storage.contributor-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/contributor-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.contributor-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/contributor-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.contributor-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "instance-formats",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-formats",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-formats.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-formats/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-formats.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-formats",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-formats.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-formats/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-formats.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-formats/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-formats.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "instance-types",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-types",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-types",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "nature-of-content-terms",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/nature-of-content-terms",
+                  "permissionsRequired": [
+                    "inventory-storage.nature-of-content-terms.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/nature-of-content-terms/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.nature-of-content-terms.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/nature-of-content-terms",
+                  "permissionsRequired": [
+                    "inventory-storage.nature-of-content-terms.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/nature-of-content-terms/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.nature-of-content-terms.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/nature-of-content-terms/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.nature-of-content-terms.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "modes-of-issuance",
+              "version": "1.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/modes-of-issuance",
+                  "permissionsRequired": [
+                    "inventory-storage.modes-of-issuance.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/modes-of-issuance/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.modes-of-issuance.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/modes-of-issuance",
+                  "permissionsRequired": [
+                    "inventory-storage.modes-of-issuance.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/modes-of-issuance/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.modes-of-issuance.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/modes-of-issuance/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.modes-of-issuance.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "instance-statuses",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-statuses",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-statuses.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-statuses.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-statuses",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-statuses.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-statuses.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-statuses.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "electronic-access-relationships",
+              "version": "1.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/electronic-access-relationships",
+                  "permissionsRequired": [
+                    "inventory-storage.electronic-access-relationships.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/electronic-access-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.electronic-access-relationships.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/electronic-access-relationships",
+                  "permissionsRequired": [
+                    "inventory-storage.electronic-access-relationships.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/electronic-access-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.electronic-access-relationships.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/electronic-access-relationships/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.electronic-access-relationships.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "statistical-codes",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/statistical-codes",
+                  "permissionsRequired": [
+                    "inventory-storage.statistical-codes.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/statistical-codes/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.statistical-codes.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/statistical-codes",
+                  "permissionsRequired": [
+                    "inventory-storage.statistical-codes.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/statistical-codes/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.statistical-codes.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/statistical-codes/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.statistical-codes.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "ill-policies",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/ill-policies",
+                  "permissionsRequired": [
+                    "inventory-storage.ill-policies.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/ill-policies/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.ill-policies.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/ill-policies",
+                  "permissionsRequired": [
+                    "inventory-storage.ill-policies.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/ill-policies/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.ill-policies.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/ill-policies/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.ill-policies.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "holdings-types",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-types",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/holdings-types",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/holdings-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/holdings-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "call-number-types",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/call-number-types",
+                  "permissionsRequired": [
+                    "inventory-storage.call-number-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/call-number-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.call-number-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/call-number-types",
+                  "permissionsRequired": [
+                    "inventory-storage.call-number-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/call-number-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.call-number-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/call-number-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.call-number-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "instance-note-types",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-note-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/instance-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-note-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/instance-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-note-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/instance-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-note-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/instance-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.instance-note-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "holdings-note-types",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-note-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-note-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/holdings-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-note-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/holdings-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-note-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/holdings-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-note-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "item-note-types",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/item-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.item-note-types.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/item-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-note-types.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/item-note-types",
+                  "permissionsRequired": [
+                    "inventory-storage.item-note-types.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/item-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-note-types.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/item-note-types/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-note-types.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "item-damaged-statuses",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/item-damaged-statuses",
+                  "permissionsRequired": [
+                    "inventory-storage.item-damaged-statuses.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/item-damaged-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-damaged-statuses.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/item-damaged-statuses",
+                  "permissionsRequired": [
+                    "inventory-storage.item-damaged-statuses.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/item-damaged-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-damaged-statuses.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/item-damaged-statuses/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.item-damaged-statuses.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "service-points",
+              "version": "3.4",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/service-points",
+                  "permissionsRequired": [
+                    "inventory-storage.service-points.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/service-points/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.service-points.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/service-points",
+                  "permissionsRequired": [
+                    "inventory-storage.service-points.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/service-points/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.service-points.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/service-points/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.service-points.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "holdings-sources",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-sources",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-sources.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/holdings-sources/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-sources.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/holdings-sources",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-sources.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/holdings-sources/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-sources.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/holdings-sources/{id}",
+                  "permissionsRequired": [
+                    "inventory-storage.holdings-sources.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-roles-keycloak-2.0.12",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "permissions-users",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/permissions/users/{id}",
+                  "permissionsRequired": [
+                    "permissions.users.item.get"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-login-keycloak-2.1.0-SNAPSHOT.105",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "login",
+              "version": "7.3",
+              "endpoints": [
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/log/events",
+                  "permissionsRequired": [
+                    "login.event.collection.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/authn/log/events",
+                  "permissionsRequired": [
+                    "login.event.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/authn/log/events/{id}",
+                  "permissionsRequired": [
+                    "login.event.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/authn/token",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/login",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/login-with-expiry",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/logout",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/logout-all",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/refresh",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/authn/loginAttempts/{id}",
+                  "permissionsRequired": [
+                    "login.attempts.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/credentials",
+                  "permissionsRequired": [
+                    "login.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/authn/credentials",
+                  "permissionsRequired": [
+                    "login.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/update",
+                  "permissionsRequired": [],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/password/repeatable",
+                  "permissionsRequired": [
+                    "login.password.validate"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/password-reset-action",
+                  "permissionsRequired": [
+                    "login.password-reset-action.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/authn/password-reset-action/{actionId}",
+                  "permissionsRequired": [
+                    "login.password-reset-action.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/authn/reset-password",
+                  "permissionsRequired": [
+                    "login.password-reset.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/authn/credentials-existence",
+                  "permissionsRequired": [
+                    "login.credentials-existence.get"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-fqm-manager-3.1.0-SNAPSHOT.57c63b8",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "entity-types",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/entity-types/{entity-type-id}",
+                  "permissionsRequired": [
+                    "fqm.entityTypes.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/entity-types",
+                  "permissionsRequired": [
+                    "fqm.entityTypes.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/entity-types/{entity-type-id}/columns/{column-name}/values",
+                  "permissionsRequired": [
+                    "fqm.entityTypes.item.columnValues.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/entity-types/materialized-views/refresh",
+                  "permissionsRequired": [
+                    "fqm.materializedViews.post"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "fqm-query",
+              "version": "2.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/query",
+                  "permissionsRequired": [
+                    "fqm.query.sync.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/query/{query-id}",
+                  "permissionsRequired": [
+                    "fqm.query.async.results.query.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/query/{query-id}/sortedIds",
+                  "permissionsRequired": [
+                    "fqm.query.async.results.sortedids.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/fqm/version",
+                  "permissionsRequired": [
+                    "fqm.version.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/fqm/migrate",
+                  "permissionsRequired": [
+                    "fqm.migrate.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/query/contents",
+                  "permissionsRequired": [
+                    "fqm.query.async.results.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/query/contents/privileged",
+                  "permissionsRequired": [
+                    "fqm.query.privileged.async.results.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/query",
+                  "permissionsRequired": [
+                    "fqm.query.async.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/query/purge",
+                  "permissionsRequired": [
+                    "fqm.query.purge.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/query/{query-id}",
+                  "permissionsRequired": [
+                    "fqm.query.async.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-di-converter-storage-2.4.0-SNAPSHOT.68",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "data-import-converter-storage",
+              "version": "1.5",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofile.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofile.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofile.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofile.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofile.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/matchProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.matchprofile.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/matchProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.matchprofile.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/matchProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.matchprofile.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import-profiles/matchProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.matchprofile.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import-profiles/matchProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.matchprofile.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/actionProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.actionprofile.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/actionProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.actionprofile.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/actionProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.actionprofile.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import-profiles/actionProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.actionprofile.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import-profiles/actionProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.actionprofile.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/mappingProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.mappingprofile.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/mappingProfiles",
+                  "permissionsRequired": [
+                    "converter-storage.mappingprofile.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/mappingProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.mappingprofile.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import-profiles/mappingProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.mappingprofile.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import-profiles/mappingProfiles/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.mappingprofile.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociations.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociation.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociations.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociation.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociation.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations/{masterId}/details",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociations.details.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileAssociations/{detailId}/masters",
+                  "permissionsRequired": [
+                    "converter-storage.profileassociations.masters.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfileSnapshots/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofilesnapshots.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/jobProfileSnapshots/{id}",
+                  "permissionsRequired": [
+                    "converter-storage.jobprofilesnapshots.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/entityTypes",
+                  "permissionsRequired": [
+                    "converter-storage.entitytypes.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileSnapshots/{profileId}",
+                  "permissionsRequired": [
+                    "converter-storage.profileSnapshots.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/data-import-profiles/profileSnapshots",
+                  "permissionsRequired": [
+                    "converter-storage.profileSnapshots.post"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-source-record-storage-5.10.0-SNAPSHOT.650",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "source-storage-batch",
+              "version": "1.3",
+              "endpoints": [
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/source-storage/batch/records",
+                  "permissionsRequired": [
+                    "source-storage.batch.records.collection.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/source-storage/batch/parsed-records",
+                  "permissionsRequired": [
+                    "source-storage.parsed-records.collection.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/source-storage/batch/parsed-records/fetch",
+                  "permissionsRequired": [
+                    "source-storage.parsed-records.fetch.collection.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/source-storage/batch/verified-records",
+                  "permissionsRequired": [
+                    "source-storage.verified-records.collection.post"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-source-record-manager-3.10.0-SNAPSHOT.993",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "source-manager-job-executions",
+              "version": "3.4",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobExecutions",
+                  "permissionsRequired": [
+                    "metadata-provider.jobExecutions.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/journalRecords/{jobExecutionId}",
+                  "permissionsRequired": [
+                    "metadata-provider.journalRecords.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobExecutions/jobProfiles",
+                  "permissionsRequired": [
+                    "metadata-provider.jobExecutions.jobProfiles.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions",
+                  "permissionsRequired": [
+                    "change-manager.jobexecutions.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions",
+                  "permissionsRequired": [
+                    "change-manager.jobexecutions.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions/{id}",
+                  "permissionsRequired": [
+                    "change-manager.jobExecutions.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions/{id}",
+                  "permissionsRequired": [
+                    "change-manager.jobExecutions.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions/{id}/children",
+                  "permissionsRequired": [
+                    "change-manager.jobExecutions.children.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions/{id}/status",
+                  "permissionsRequired": [
+                    "change-manager.jobExecutions.status.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/change-manager/jobExecutions/{id}/jobProfile",
+                  "permissionsRequired": [
+                    "change-manager.jobExecutions.jobProfile.item.put"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "metadata-provider-job-execution-logs",
+              "version": "1.1",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobLogEntries/{jobExecutionId}",
+                  "permissionsRequired": [
+                    "metadata-provider.jobLogEntries.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobLogEntries/{jobExecutionId}/records/{recordId}",
+                  "permissionsRequired": [
+                    "metadata-provider.jobLogEntries.records.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobSummary/{jobExecutionId}",
+                  "permissionsRequired": [
+                    "metadata-provider.jobSummary.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/jobExecutions/users",
+                  "permissionsRequired": [
+                    "metadata-provider.jobExecutions.users.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/metadata-provider/incomingRecords/{recordId}",
+                  "permissionsRequired": [
+                    "metadata-provider.incomingrecords.get"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "mapping-rules-provider",
+              "version": "2.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/mapping-rules/{recordType}",
+                  "permissionsRequired": [
+                    "mapping-rules.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/mapping-rules/{recordType}",
+                  "permissionsRequired": [
+                    "mapping-rules.update"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/mapping-rules/{recordType}/restore",
+                  "permissionsRequired": [
+                    "mapping-rules.restore"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "moduleId": "mod-users-19.4.6-SNAPSHOT.336",
+          "applicationId": "app-platform-full-1.0.0-SNAPSHOT.1283",
+          "location": "http://mod-mock-server:8081",
+          "interfaces": [
+            {
+              "id": "users",
+              "version": "16.4",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users",
+                  "permissionsRequired": [
+                    "users.collection.get"
+                  ],
+                  "permissionsDesired": [
+                    "users.basic-read.execute",
+                    "users.restricted-read.execute"
+                  ]
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users/{id}",
+                  "permissionsRequired": [
+                    "users.item.get"
+                  ],
+                  "permissionsDesired": [
+                    "users.basic-read.execute",
+                    "users.restricted-read.execute"
+                  ]
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users",
+                  "permissionsRequired": [
+                    "users.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users/profile-picture/{id}",
+                  "permissionsRequired": [
+                    "users.profile-picture.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/users/profile-picture/{id}",
+                  "permissionsRequired": [
+                    "users.profile-picture.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/users/profile-picture/{id}",
+                  "permissionsRequired": [
+                    "users.profile-picture.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/users/profile-picture",
+                  "permissionsRequired": [
+                    "users.profile-picture.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/users/configurations/entry/{configId}",
+                  "permissionsRequired": [
+                    "users.configurations.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/users/configurations/entry",
+                  "permissionsRequired": [
+                    "users.configurations.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/users/{id}",
+                  "permissionsRequired": [
+                    "users.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/users/{id}",
+                  "permissionsRequired": [
+                    "users.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/users",
+                  "permissionsRequired": [
+                    "users.collection.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/groups",
+                  "permissionsRequired": [
+                    "usergroups.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/groups/{id}*",
+                  "permissionsRequired": [
+                    "usergroups.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/groups*",
+                  "permissionsRequired": [
+                    "usergroups.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/groups/{id}*",
+                  "permissionsRequired": [
+                    "usergroups.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/groups/{id}*",
+                  "permissionsRequired": [
+                    "usergroups.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/addresstypes",
+                  "permissionsRequired": [
+                    "addresstypes.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/addresstypes/{id}",
+                  "permissionsRequired": [
+                    "addresstypes.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/addresstypes",
+                  "permissionsRequired": [
+                    "addresstypes.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/addresstypes/{id}",
+                  "permissionsRequired": [
+                    "addresstypes.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/addresstypes/{id}",
+                  "permissionsRequired": [
+                    "addresstypes.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/proxiesfor",
+                  "permissionsRequired": [
+                    "proxiesfor.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/proxiesfor/{id}",
+                  "permissionsRequired": [
+                    "proxiesfor.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/proxiesfor",
+                  "permissionsRequired": [
+                    "proxiesfor.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/proxiesfor/{id}",
+                  "permissionsRequired": [
+                    "proxiesfor.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/proxiesfor/{id}",
+                  "permissionsRequired": [
+                    "proxiesfor.item.delete"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/departments",
+                  "permissionsRequired": [
+                    "departments.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/departments/{id}",
+                  "permissionsRequired": [
+                    "departments.item.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/departments",
+                  "permissionsRequired": [
+                    "departments.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "PUT"
+                  ],
+                  "pathPattern": "/departments/{id}",
+                  "permissionsRequired": [
+                    "departments.item.put"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/departments/{id}",
+                  "permissionsRequired": [
+                    "departments.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            },
+            {
+              "id": "user-tenants",
+              "version": "1.0",
+              "endpoints": [
+                {
+                  "methods": [
+                    "GET"
+                  ],
+                  "pathPattern": "/user-tenants",
+                  "permissionsRequired": [
+                    "user-tenants.collection.get"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "POST"
+                  ],
+                  "pathPattern": "/user-tenants",
+                  "permissionsRequired": [
+                    "user-tenants.item.post"
+                  ],
+                  "permissionsDesired": []
+                },
+                {
+                  "methods": [
+                    "DELETE"
+                  ],
+                  "pathPattern": "/user-tenants",
+                  "permissionsRequired": [
+                    "user-tenants.item.delete"
+                  ],
+                  "permissionsDesired": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+
+  }
+}

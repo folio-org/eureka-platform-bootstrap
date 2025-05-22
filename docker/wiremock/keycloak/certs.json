@@ -1,0 +1,33 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "urlPattern": "/realms/.*/protocol/openid-connect/certs"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "keys": [
+            {
+              "kid": "qJr6ysS_hauNBc65Sp16ORFOqJtII3ej6uAP2-jOnuo",
+              "kty": "RSA",
+              "alg": "RS256",
+              "use": "sig",
+              "n": "mcCDCn7e7eFlpshZxPeQjzuXFUc5bQnn6tPtTaOt-A1fftoZYdJ7-5wlNv-6sUMG5L4uRiGXR9yfq-_Pc88hX_7yXE-jGA8ng714Hk4VQNSBxbvn-sKHzxbxNZUz7Rz0tuciosEdwVpmwS5hK0jlBsBetYkx4B-czs6qrT1uqgEgwNDQ8rweEreCjMUP4tm6B7yw20oXKDFws995IyTTxaMNkMtz1AKaOVj6HEAcVDvqr7lNUxDWEJkAOgYVMVl2XT3P0IMMckd-EXGqQvNMS9DnRG8qVv2zHUq1DbPbOayx431ERZtnVXmCQFs0-x7kwPwpQ_rNnh_dnGOSyLRJYw",
+              "e": "AQAB",
+              "x5c": [
+                "MIICmTCCAYECBgGFL7YytjANBgkqhkiG9w0BAQsFADAQMQ4wDAYDVQQDDAV0ZXN0MTAeFw0yMjEyMjAxMzI0MDdaFw0zMjEyMjAxMzI1NDdaMBAxDjAMBgNVBAMMBXRlc3QxMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmcCDCn7e7eFlpshZxPeQjzuXFUc5bQnn6tPtTaOt+A1fftoZYdJ7+5wlNv+6sUMG5L4uRiGXR9yfq+/Pc88hX/7yXE+jGA8ng714Hk4VQNSBxbvn+sKHzxbxNZUz7Rz0tuciosEdwVpmwS5hK0jlBsBetYkx4B+czs6qrT1uqgEgwNDQ8rweEreCjMUP4tm6B7yw20oXKDFws995IyTTxaMNkMtz1AKaOVj6HEAcVDvqr7lNUxDWEJkAOgYVMVl2XT3P0IMMckd+EXGqQvNMS9DnRG8qVv2zHUq1DbPbOayx431ERZtnVXmCQFs0+x7kwPwpQ/rNnh/dnGOSyLRJYwIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQB30ClA7HVbywxJI5YFDw9OsDlpKoJyVjpm79BgFFrBPu+Op1hSrW0JKXDfeyR5OtevzMzm5TdKAZ4iF9snXVtRlpwSg1hpGer/WRqjSvOdmlmxn8NOVbBHZObbf28XWg+sP5zWIxURzBj+sUpHSLyxw90/4nsgf6TeA63bWVDRqhpMnsYaM3M9bNYjxtBk69zGf071vdRlFpHF1u0Yvp68krVSJnUhHh9+cyp3l7AAiKQoa6oJ6B7TH11rCPVYvFmTBJ9C4s4/fTeSWSfOZVG3r1EhewLX8LZwdq1/uqd+c8xJvIFDaqjdyRuFRioG7d2L1KDknxIEUsLNIQpKc90e"
+              ],
+              "x5t": "cUYMX-XcNpp5226CMu2XOk0rqyU",
+              "x5t#S256": "DALGzaSt54J2TKkqeYlF4pIlysk0EtYIlU08kz4mSnw"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

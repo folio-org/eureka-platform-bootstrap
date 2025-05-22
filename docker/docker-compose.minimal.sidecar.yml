@@ -210,3 +210,45 @@ services:
       MODULE_VERSION: ${MOD_SCHEDULER_VERSION}
       MODULE_URL: http://mod-scheduler:8081
       SIDECAR_URL: http://sc-scheduler:8081
+
+  sc-perf-inventory-storage:
+    image: folio-module-sidecar-native:latest
+    networks: [ fpm-net ]
+    deploy:
+      resources:
+        limits:
+          memory: 224m
+          cpus: 1.0
+        reservations:
+          memory: 192m
+          cpus: 1.0
+    profiles: [ sc-performance ]
+    container_name: sc-perf-inventory-storage
+    ports:
+      - "19021:8081"
+    env_file: [ env/performance-sidecar.env ]
+    environment:
+      MODULE_NAME: mod-inventory-storage
+      MODULE_VERSION: 28.1.0-SNAPSHOT.1064
+      SIDECAR_URL: http://sc-perf-inventory-storage:8081
+
+  sc-perf-bulk-operations:
+    image: folio-module-sidecar-native:latest
+    networks: [ fpm-net ]
+    deploy:
+      resources:
+        limits:
+          memory: 224m
+          cpus: 1.0
+        reservations:
+          memory: 192m
+          cpus: 1.0
+    profiles: [ sc-performance ]
+    container_name: sc-perf-bulk-operations
+    ports:
+      - "19022:8081"
+    env_file: [ env/performance-sidecar.env ]
+    environment:
+      MODULE_NAME: mod-bulk-operations
+      MODULE_VERSION: 2.2.0-SNAPSHOT.348
+      SIDECAR_URL: http://sc-perf-bulk-storage:8081

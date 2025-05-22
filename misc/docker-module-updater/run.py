@@ -7,6 +7,9 @@ import json
 from collections import OrderedDict
 
 
+applicationName='app-platform-full'
+
+
 def setScriptDirectory():
   try:
     # Get the directory name of the script
@@ -60,7 +63,7 @@ def updateModuleDiscovery(moduleVersions):
       "version": moduleVersion,
       "location": "http://" + moduleName.replace("mod-", "sc-") + ":8081"
     }))
-  discoveryFilePath = "../../descriptors/app-platform-minimal/discovery.json"
+  discoveryFilePath = f"../../descriptors/{applicationName}/discovery.json"
   resultObject = OrderedDict({"discovery": discovery})
   writeJson(discoveryFilePath, resultObject)
 
@@ -116,7 +119,7 @@ def updateModuleVersions(moduleVersions):
 
 def main():
   setScriptDirectory()
-  applicationDescriptor = readJson("../../descriptors/app-platform-minimal/descriptor.json")
+  applicationDescriptor = readJson(f"../../descriptors/{applicationName}/descriptor.json")
   moduleVersions = getModuleVersions(applicationDescriptor)
   updateModuleDiscovery(moduleVersions)
   updateModuleVersions(moduleVersions)
