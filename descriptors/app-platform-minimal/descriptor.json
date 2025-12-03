@@ -3,7 +3,6 @@
   "name": "app-platform-minimal",
   "version": "0.0.17-SNAPSHOT.2",
   "description": "Minimal FOLIO platform installation",
-  "platform": "base",
   "modules": [
     {
       "id": "mod-configuration-5.12.0",
