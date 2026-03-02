@@ -52,7 +52,7 @@ alter schema public owner to keycloak_rw;
 create database kong;
 \set kong_db_password `echo $KONG_DB_PASSWORD`
 create user kong_rw with password :'kong_db_password';
-alter database kong owner to keycloak_rw;
+alter database kong owner to kong_rw;
 grant connect on database kong to kong_rw;
 grant all privileges on database kong to kong_rw;
 \c kong
