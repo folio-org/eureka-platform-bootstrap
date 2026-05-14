@@ -30,7 +30,7 @@ DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
 echo "Docker version: $DOCKER_VERSION"
 
 # Docker Compose
-DOCKER_COMPOSE_VERSION=$(docker compose version --short)
+DOCKER_COMPOSE_VERSION=$(docker-compose version --short)
 echo "Docker Compose version: $DOCKER_COMPOSE_VERSION"
 
 # Python
