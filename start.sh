@@ -11,7 +11,7 @@ command_exists () {
 # Check for required tools
 echo "Checking installed tools..."
 
-REQUIRED_COMMANDS=("docker" "docker-compose" "python3" "java" "mvn" "jq" "curl")
+REQUIRED_COMMANDS=("docker" "python3" "java" "mvn" "jq" "curl")
 
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
     if ! command_exists "$cmd"; then
@@ -30,7 +30,7 @@ DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
 echo "Docker version: $DOCKER_VERSION"
 
 # Docker Compose
-DOCKER_COMPOSE_VERSION=$(docker-compose version --short)
+DOCKER_COMPOSE_VERSION=$(docker compose version --short)
 echo "Docker Compose version: $DOCKER_COMPOSE_VERSION"
 
 # Python
