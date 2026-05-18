@@ -11,7 +11,7 @@ command_exists () {
 # Check for required tools
 echo "Checking installed tools..."
 
-REQUIRED_COMMANDS=("docker" "docker-compose" "python3" "java" "mvn" "jq" "curl")
+REQUIRED_COMMANDS=("docker" "python3" "java" "mvn" "jq" "curl")
 
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
     if ! command_exists "$cmd"; then
