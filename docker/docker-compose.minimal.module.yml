@@ -125,6 +125,12 @@ services:
     container_name: mod-roles-keycloak
     image: ${MOD_ROLES_KEYCLOAK_REPOSITORY}:${MOD_ROLES_KEYCLOAK_VERSION}
     profiles: [ app-platform-minimal ]
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+        reservations:
+          memory: 512m
     ports:
       - "9011:8081"
       - "10011:5005"
@@ -148,6 +154,12 @@ services:
     container_name: mod-scheduler
     image: ${MOD_SCHEDULER_REPOSITORY}:${MOD_SCHEDULER_VERSION}
     profiles: [ app-platform-minimal ]
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+        reservations:
+          memory: 512m
     ports:
       - "9020:8081"
       - "10020:5005"

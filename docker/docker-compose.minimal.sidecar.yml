@@ -16,9 +16,9 @@ x-sidecar-module: &sidecar-module
   deploy:
     resources:
       limits:
-        memory: 224m
+        memory: 384m
       reservations:
-        memory: 192m
+        memory: 256m
 
 x-sidecar-env: &sidecar-env
   KC_URL: http://keycloak:8080
