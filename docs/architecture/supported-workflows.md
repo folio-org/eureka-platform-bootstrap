@@ -21,7 +21,7 @@ implementation. Prefer the operator surface; treat all workers as building block
 
 Options: `--actualize [--pre-release]`, `--native-sidecar` (builds the native
 sidecar image in-pipeline if it is missing), `--rebuild-native-sidecar` (force a
-fresh native build), `--ui`, `--yes`
+fresh native build), `--yes`
 (non-interactive), `--debug` (stream helper output).
 
 `./start.sh` is the single entrypoint. It prepares config, starts core →
@@ -65,13 +65,12 @@ no separate verification subsystem.
 | `misc/lib/docker-health.sh` | container health and HTTP route readiness waits |
 | `docker/compose.yaml` | standard Compose manifest that includes the runtime layers |
 | `docker/lib/local-credentials.sh` | local credential and Vault-token persistence |
-| `misc/folio-ui/*` | UI build implementation details |
 | `misc/vault/scripts/*` | Vault image-internal boot scripts |
 
 ## What should remain stable
 
 - the single `./start.sh` entrypoint and its flags
-- the layered runtime model: `core`, `mgr-components`, `app-platform-minimal`, `ui`
+- the layered runtime model: `core`, `mgr-components`, `app-platform-minimal`
 - the local configuration file structure in `docker/`
 - descriptor-backed registration for the bundled `app-platform-minimal` application
 

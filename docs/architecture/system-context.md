@@ -12,7 +12,6 @@ It is not only a collection of files. In practice, it behaves like an operator-f
 - supplies default and local configuration
 - orchestrates startup and shutdown
 - bootstraps the environment after container startup
-- optionally builds and deploys UI assets
 
 ## Context Diagram
 
@@ -23,7 +22,6 @@ flowchart LR
   Repo["eureka-platform-bootstrap\nRepository as Local Environment Tool"]
   Docker["Docker Engine + Docker Compose"]
   Registry["FOLIO Registry"]
-  PlatformComplete["platform-complete Git Repository"]
   Host["Developer Workstation\nShell, Filesystem, /etc/hosts"]
   Runtime["Running Local FOLIO Environment"]
   Browser["Browser / API Client"]
@@ -32,7 +30,6 @@ flowchart LR
   Contributor --> Repo
   Repo --> Docker
   Repo --> Registry
-  Repo --> PlatformComplete
   Repo --> Host
   Repo --> Runtime
   Docker --> Runtime
@@ -53,8 +50,7 @@ flowchart LR
 | Docker Engine and Docker Compose | Main runtime execution engine | invoked directly by the bootstrap through `docker/compose.yaml` |
 | Developer workstation | Provides shell, filesystem, `/etc/hosts`, local Docker access | modified during bootstrap by `./start.sh` |
 | FOLIO Registry | Source for module version metadata | used by `misc/module-version-actualizer.py` |
-| `platform-complete` Git repository | Source for optional UI build | used by `misc/build-folio-ui.sh` |
-| Browser / API client | Consumes the running local platform | UI access, Keycloak access, Kong API access |
+| Browser / API client | Consumes the running local platform | Kong API access, Keycloak access, Kafka UI inspection |
 
 ## Boundary Of Responsibility
 
@@ -64,7 +60,6 @@ Inside the repository boundary:
 - local config defaults and overrides
 - application descriptors and discovery files
 - startup/bootstrap scripts
-- UI build orchestration helpers
 - helper operations for users and tenants
 
 Outside the repository boundary:

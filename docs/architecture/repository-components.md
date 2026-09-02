@@ -10,7 +10,7 @@ areas own which responsibilities, and how the main pieces interact.
 | repository root | the single entrypoint and primary docs | `start.sh`, `README.md`, `AGENTS.md` |
 | `docker/` | Compose runtime model and environment definitions | `docker-compose*.yml`, `.env`, `.env.local`, `.env.local.credentials` |
 | `descriptors/` | application metadata for registration and discovery | `descriptors/app-platform-minimal/{descriptor,discovery}.json` |
-| `misc/` | bootstrap orchestration, libraries, and helper tooling | `bootstrap-engine.sh`, `lib/*`, version/UI/user helpers |
+| `misc/` | bootstrap orchestration, libraries, and helper tooling | `bootstrap-engine.sh`, `lib/*`, version/user helpers |
 | `docs/` | architecture docs and roadmap | current documentation set |
 
 ## Component relationships
@@ -27,7 +27,6 @@ flowchart LR
   Descriptors["descriptors/app-platform-minimal/*.json"]
   VersionSync["misc/docker-module-updater/run.py"]
   RegistrySync["misc/module-version-actualizer.py"]
-  UIBuild["misc/build-folio-ui.sh\nmisc/folio-ui/*"]
 
   Start --> Engine
   Engine --> Libs
@@ -40,8 +39,6 @@ flowchart LR
   VersionSync --> Descriptors
   VersionSync --> EnvLocal
   RegistrySync --> Descriptors
-  Engine --> UIBuild
-  UIBuild --> EnvLocal
 ```
 
 ## Major components
@@ -53,7 +50,7 @@ a couple of prompts, tool checks, then it sources the libraries and runs the flo
 
 `misc/bootstrap-engine.sh` owns the bootstrap phase sequence (`run_bootstrap_flow`)
 and the local-setup helpers (env files, `/etc/hosts`, descriptor service
-resolution, optional ARM/UI builds). It sources the libraries below.
+resolution, optional ARM image builds). It sources the libraries below.
 
 The reusable logic lives in three libraries:
 
@@ -92,12 +89,6 @@ bootstrap when the environment is registered through the manager components.
   generated module env state, prints descriptor-derived `--module-env` exports,
   and resolves the `--services` list.
 
-### 6. Optional UI build subsystem
-
-- `misc/build-folio-ui.sh` orchestrates repository retrieval, config preparation, and image build
-- `misc/folio-ui/*` contains helper scripts for the build process
-- `docker/docker-compose.ui.yml` defines the optional runtime service
-
 ## Operational entry points
 
 | Entrypoint | Role today |
@@ -105,7 +96,7 @@ bootstrap when the environment is registered through the manager components.
 | `start.sh` | single operator entrypoint |
 | `stop.sh` | environment teardown (containers + optional volumes) |
 
-The UI, user, image, and descriptor workers are internal implementation files
+The user, image, and descriptor workers are internal implementation files
 called by `start.sh`, not operator entrypoints.
 
 ## Why this view matters

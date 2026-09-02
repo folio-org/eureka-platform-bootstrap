@@ -20,7 +20,6 @@ bootstrap workflow; operators supply any required local configuration themselves
 | `docker-compose.mgmt.yml` | Manager components | `mgr-components` |
 | `docker-compose.minimal.module.yml` | Backend modules | `app-platform-minimal` |
 | `docker-compose.minimal.sidecar.yml` | Module sidecars | `app-platform-minimal` |
-| `docker-compose.ui.yml` | FOLIO UI | `ui` |
 
 `compose.yaml` explicitly includes these files in the listed order, so native
 `docker compose` resolves one deterministic project definition.
@@ -30,7 +29,6 @@ bootstrap workflow; operators supply any required local configuration themselves
 1. **core** — Database, Kafka, Vault, Kong, and Keycloak (Keycloak runs within the `core` profile)
 2. **mgr-components** — Manager services (depends on db, keycloak)
 3. **app-platform-minimal** — Modules + sidecars (depends on mgr-components)
-4. **ui** — FOLIO UI (depends on kong, keycloak)
 
 ## Configuration
 

@@ -16,7 +16,7 @@
 # (db, kafka-data, vault-data) without hardcoding their names.
 #
 # Every service in the stack is gated behind a Compose profile (core,
-# mgr-components, app-platform-minimal, ui). A bare `docker compose down` sees
+# mgr-components, app-platform-minimal). A bare `docker compose down` sees
 # an empty default service set and silently no-ops, so teardown must activate
 # all profiles. `COMPOSE_PROFILES='*'` is the wildcard form of "all profiles"
 # (requires Docker Compose 2.24+, enforced by ./start.sh).

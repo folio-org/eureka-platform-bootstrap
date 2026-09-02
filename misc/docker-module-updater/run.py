@@ -187,7 +187,7 @@ def owned_generated_var_names(
   Built from both the descriptor modules and the compose-declared module
   services, so that generated vars for a module dropped from the descriptor are
   still recognised (and therefore removed) on regeneration. Prefixes are MOD_*,
-  so hand-authored vars such as FOLIO_UI_IMAGE or MGR_*_IMAGE are never matched.
+  so hand-authored vars such as FOLIO_KEYCLOAK_IMAGE or MGR_*_IMAGE are never matched.
   """
   owned: set[str] = set()
   for name in set(known_module_services) | set(module_versions):

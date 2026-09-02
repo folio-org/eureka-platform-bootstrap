@@ -116,8 +116,7 @@ otherwise breakpoints resolve against mismatched sources.
 1. Environment up (Step 1); if a specific older version is needed, pin it: set
    `MOD_<NAME>_IMAGE=folioorg/<module>@sha256:...` in `docker/.env.local` (digest refs are exempt
    from the version-skew halt; remove the line afterwards), then `./start.sh`.
-2. Reproduce through the gateway with a tenant token, or the UI (`./start.sh --ui` →
-   `http://localhost:3000`, `folio`/`folio`).
+2. Reproduce through the gateway (`http://localhost:8000`) with a tenant token.
 3. Check a Liquibase migration landed: `docker exec -it db psql -U postgres -c '\l'`, then query
    the module's database (schema per module compose env).
 4. Fix locally → deploy (Step 3) → confirm the repro is gone. No pushes involved.

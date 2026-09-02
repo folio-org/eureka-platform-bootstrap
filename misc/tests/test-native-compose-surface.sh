@@ -20,8 +20,7 @@ for file in \
   docker-compose.keycloak.yml \
   docker-compose.mgmt.yml \
   docker-compose.minimal.module.yml \
-  docker-compose.minimal.sidecar.yml \
-  docker-compose.ui.yml; do
+  docker-compose.minimal.sidecar.yml; do
   grep -Fq -- "- path: ${file}" "${manifest}" \
     || fail "compose manifest does not include ${file}"
 done
@@ -32,8 +31,12 @@ for removed in \
   docker/set-local-credentials.sh \
   docker/set-default-local-credentials.sh \
   docker/misc/get-vault-token.sh \
-  docker/misc/populate-vault-token.sh; do
-  [[ ! -e "${PROJECT_ROOT}/${removed}" ]] || fail "obsolete wrapper remains: ${removed}"
+  docker/misc/populate-vault-token.sh \
+  docker/docker-compose.ui.yml \
+  misc/build-folio-ui.sh \
+  misc/folio-ui \
+  misc/configure-ui-redirect.sh; do
+  [[ ! -e "${PROJECT_ROOT}/${removed}" ]] || fail "removed path still present: ${removed}"
 done
 
 grep -q '^COMPOSE_PROJECT_NAME=folio-platform-minimal$' "${DOCKER_DIR}/.env" \

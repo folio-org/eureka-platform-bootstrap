@@ -291,8 +291,8 @@ Priority: `P1`
 
 Problem:
 
-The documented runtime model is `core`, `mgr-components`,
-`app-platform-minimal`, and `ui`, but Compose files contain additional profiles
+The documented runtime model is `core`, `mgr-components` and
+`app-platform-minimal`, but Compose files contain additional profiles
 (`app-notification`, `app-core-storage`, `legacy`, `keycloak-cluster`, `full`).
 The former Compose wrapper merged files through filesystem discovery.
 
@@ -311,7 +311,6 @@ Evidence:
 - `docker/docker-compose.keycloak.yml:59-65` and `88-97` include extra profiles.
 - `docker/docker-compose.minimal.module.yml:48-70` includes `legacy` on only some
   modules.
-- `docker/docker-compose.ui.yml` includes a `full` profile.
 - The former wrapper built `COMPOSE_FILE` from unsorted `find`.
 - `docker/README.md:41-47` still describes `keycloak-cluster` as a separate
   startup step, while default Keycloak is included in `core`.
@@ -343,7 +342,13 @@ rg -n "app-notification|app-core-storage|legacy|keycloak-cluster|full" docker do
 
 ### GAP-006: UI build flow may be duplicating upstream stock behavior
 
-Priority: `P1`
+Status: **SUPERSEDED — resolved by removal.** FOLIO UI support (the
+`platform-complete` build, `configure-ui-redirect.sh`, the `folio-ui` Compose
+service and the `./start.sh --ui` flag) has been removed; this environment is
+backend-only. The file paths quoted below no longer exist and are kept only as a
+record of why the subsystem was dropped rather than reworked.
+
+Priority: `P1` (closed)
 
 Problem:
 
@@ -417,8 +422,8 @@ make unverified edits.
 Evidence:
 
 - `misc/tests/run.sh:23-32` syntax-checks only a subset of shell files.
-- Supported helpers include Docker helpers, UI helpers, image builders,
-  `configure-ui-redirect.sh`, Vault helpers, and `create-user.sh`.
+- Supported helpers include Docker helpers, image builders, Vault helpers, and
+  `create-user.sh`.
 - During audit, `git ls-files '*.sh' | xargs -n 1 bash -n` passed, but this is
   not part of `misc/tests/run.sh`.
 
@@ -486,4 +491,4 @@ Resolution (done):
    shared API logic.
 5. Refactor supported API helper behavior via GAP-003.
 6. Clean Compose/profile merge semantics via GAP-005.
-7. Research UI stock path via GAP-006 before changing UI scripts.
+   (GAP-006 is closed: UI support was removed instead of reworked.)

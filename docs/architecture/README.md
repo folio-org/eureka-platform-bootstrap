@@ -14,7 +14,6 @@ It combines:
 - environment-variable layers and local overrides
 - application descriptors and discovery metadata
 - Bash and Python automation for startup, bootstrap, and helper operations
-- optional UI build and deployment support
 
 ## What This Repository Is Responsible For
 
@@ -25,7 +24,6 @@ Today, the repository owns five major responsibilities:
    - Manager components such as `mgr-applications`, `mgr-tenants`, and `mgr-tenant-entitlements`.
    - The `app-platform-minimal` application services: `mod-*` backends and
      matching `sc-*` sidecars declared in this repository.
-   - Optional UI runtime via `folio-ui`.
 
 2. Provide the local configuration model.
    - Default values in `docker/.env`.
@@ -47,7 +45,6 @@ Today, the repository owns five major responsibilities:
    - image building
    - module version synchronization
    - user and tenant helpers
-   - optional FOLIO UI build workflow
 
 ## What This Repository Does Not Own
 
@@ -55,7 +52,6 @@ The repository does not own:
 
 - the implementation of FOLIO backend modules themselves
 - the implementation of Keycloak, Kong, Vault, Kafka, or PostgreSQL
-- the implementation of `platform-complete`
 - a generic production deployment system for all FOLIO environments
 
 It is a local-environment orchestration repository, not the source repository for the platform services it runs.
@@ -67,7 +63,6 @@ The current environment is organized around a layered runtime model:
 - `core` profile - infrastructure and access layers
 - `mgr-components` profile - platform management services
 - `app-platform-minimal` profile - backend modules and sidecars for the bundled minimal application
-- `ui` profile - optional web UI
 
 The repository can drive this layered model through the single `./start.sh` entrypoint, or through lower-level staged commands inside `docker/`.
 
@@ -91,7 +86,6 @@ In its current form, the repository behaves like a combination of:
 - a single `./start.sh` operator entrypoint over focused libraries
 - a set of manual operational entrypoints inside `docker/`
 - a bundled `app-platform-minimal` descriptor/discovery registration bundle
-- an optional UI builder and deployer
 
 The repository is therefore both:
 

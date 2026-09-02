@@ -82,8 +82,6 @@ fi
 echo "==> Shell functional tests"
 shell_tests=(
   misc/tests/test-bootstrap-create-user-gateway.sh
-  misc/tests/test-bootstrap-ui-gateway.sh
-  misc/tests/test-build-folio-ui-host-gateway.sh
   misc/tests/test-build-images-effective-sidecar.sh
   misc/tests/test-build-images-effective-module-override.sh
   misc/tests/test-build-images-vault-decision.sh

@@ -37,7 +37,6 @@ and bootstrap repository.
 ./start.sh --actualize [--pre-release]       # refresh module versions first (SNAPSHOT with --pre-release)
 ./start.sh --native-sidecar                  # native folio-module-sidecar image (built if missing)
 ./start.sh --rebuild-native-sidecar          # force a fresh native sidecar build
-./start.sh --ui                              # also build and deploy the FOLIO UI
 ./start.sh --yes                             # non-interactive (assume defaults / yes)
 ./start.sh --debug                           # stream all helper output
 ```
@@ -87,12 +86,6 @@ nodes are running.
 - `docker/.env.local.credentials` — local secrets and Vault token state
 
 Service-level environment variables are defined inline in the Compose files.
-
-## Optional UI
-
-```bash
-./start.sh --ui
-```
 
 ## Validation
 

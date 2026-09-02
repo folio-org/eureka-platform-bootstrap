@@ -105,8 +105,6 @@ assert_stdout_value() {
 assert_stdout_value 'resolve_absolute_path' "${PROJECT_ROOT}/start.sh" \
   resolve_absolute_path "${PROJECT_ROOT}/start.sh"
 assert_stdout_value 'host_api_gateway_url' 'http://localhost:8000' host_api_gateway_url
-assert_stdout_value 'host_kong_url' 'http://localhost:8000' host_kong_url
-assert_stdout_value 'host_keycloak_url' 'http://localhost:8080' host_keycloak_url
 assert_stdout_value 'image_source_for_var fallback' 'descriptor' image_source_for_var MOD_USERS_IMAGE descriptor
 assert_stdout_value 'image_plan_action' 'native arm64 present' image_plan_action mod-users folioci/mod-users:latest
 assert_stdout_value 'obtain_system_access_token' 'system-token-123' obtain_system_access_token

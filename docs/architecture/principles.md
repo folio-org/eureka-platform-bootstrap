@@ -32,7 +32,6 @@ The runtime is intentionally layered:
 - infrastructure first
 - manager components second
 - application services third
-- optional UI last
 
 This layering captures real dependencies in the local environment and provides a useful mental model for operators.
 
@@ -68,15 +67,8 @@ The repository is not only declarative. It also supports scripted operational fl
 - shutdown
 - version synchronization
 - user creation
-- UI build
 
 That scriptability is useful and should be retained, even if the internal structure changes.
-
-### 8. Optional experience layers
-
-The UI is modeled as an optional layer instead of a mandatory part of backend bootstrap.
-
-This principle keeps the environment usable in headless or API-first workflows.
 
 ## Invariants Worth Preserving
 

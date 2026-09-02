@@ -478,7 +478,6 @@ _ui_phase_label() {
     'Start application services') printf 'app services' ;;
     'Finalize tenant setup')     printf 'tenant' ;;
     'Create default admin user') printf 'user' ;;
-    'Build and deploy UI')       printf 'ui' ;;
     *) printf '%s' "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" ;;
   esac
 }

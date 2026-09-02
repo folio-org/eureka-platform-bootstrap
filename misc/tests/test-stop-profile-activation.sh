@@ -2,7 +2,7 @@
 #
 # Regression: every `docker compose down`/`stop` in stop.sh must activate
 # Compose profiles. Every service in the stack is gated behind a profile
-# (core, mgr-components, app-platform-minimal, ui), so a bare
+# (core, mgr-components, app-platform-minimal), so a bare
 # `docker compose down` resolves to an empty default service set and
 # silently no-ops (exit 0, no containers stopped) -- the script reports
 # success while leaving the stack running. This test would have caught

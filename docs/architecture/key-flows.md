@@ -8,7 +8,7 @@ today. Descriptive on purpose, so future refactoring can preserve core behavior.
 ### Trigger
 
 - operator runs `./start.sh` (optionally with runtime flags such as
-  `--actualize`, `--native-sidecar`, `--ui`, `--yes`, or `--debug`)
+  `--actualize`, `--native-sidecar`, `--yes`, or `--debug`)
 
 ### Primary files involved
 
@@ -71,15 +71,7 @@ Keeps application metadata and runtime values aligned.
   (`--services` resolves the Compose service list; `--module-env` prints
   descriptor-derived shell exports.)
 
-## 4. Optional UI build and deploy flow
-
-The UI is intentionally separate from backend bootstrap.
-
-- Trigger: `./start.sh --ui`.
-- Steps: load UI config, clone/update `platform-complete`, generate
-  `stripes.config.js` and package metadata, build the image, deploy `folio-ui`.
-
-## 5. User creation flow
+## 4. User creation flow
 
 The internal user-provisioning worker invoked by bootstrap creates `folio/folio`:
 
@@ -90,7 +82,7 @@ The internal user-provisioning worker invoked by bootstrap creates `folio/folio`
 5. find or create the `Admin` role
 6. attach capabilities and role assignments
 
-## 6. Shutdown and reset flow
+## 5. Shutdown and reset flow
 
 - `./stop.sh` (repo root) drives teardown via two prompts:
   - Soft teardown: remove containers (default yes) — removes the stack, keeps volumes.
@@ -101,6 +93,5 @@ The internal user-provisioning worker invoked by bootstrap creates `folio/folio`
 ## Flow summary
 
 Across all flows the repository repeatedly: resolves local config, turns repo
-definitions into running runtime units, applies post-start bootstrap actions, and
-optionally attaches additional experience layers. These recurring patterns are the
-anchors for further simplification.
+definitions into running runtime units, and applies post-start bootstrap actions.
+These recurring patterns are the anchors for further simplification.

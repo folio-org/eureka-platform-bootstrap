@@ -8,7 +8,7 @@
 #
 # Expected globals (set by the caller, with sane defaults below):
 #   APP_DESCRIPTOR_PATH, APP_DISCOVERY_PATH, SIDECAR_MODE, ACTUALIZE_MODULES,
-#   PRE_RELEASE_MODE, BUILD_ARM_IMAGES, BUILD_UI
+#   PRE_RELEASE_MODE, BUILD_ARM_IMAGES
 
 [[ -n "${_BOOTSTRAP_ENGINE_SOURCED:-}" ]] && return 0
 readonly _BOOTSTRAP_ENGINE_SOURCED=1
@@ -31,7 +31,6 @@ REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES:-false}"
 ACTUALIZE_MODULES="${ACTUALIZE_MODULES:-false}"
 PRE_RELEASE_MODE="${PRE_RELEASE_MODE:-false}"
 BUILD_ARM_IMAGES="${BUILD_ARM_IMAGES:-false}"
-BUILD_UI="${BUILD_UI:-false}"
 
 APP_NAME="${APP_NAME:-}"
 APP_ID="${APP_ID:-}"
@@ -584,14 +583,6 @@ host_api_gateway_url() {
   printf '%s\n' "${API_GATEWAY_URL:-${KONG_URL:-${FOLIO_KONG_URL:-http://localhost:8000}}}"
 }
 
-host_kong_url() {
-  printf '%s\n' "${KONG_URL:-${FOLIO_KONG_URL:-http://localhost:8000}}"
-}
-
-host_keycloak_url() {
-  printf '%s\n' "${KEYCLOAK_URL:-${FOLIO_KEYCLOAK_URL:-${KEYCLOAK_BASE_URL:-http://localhost:8080}}}"
-}
-
 create_default_admin_user() {
   local max_retries=3 retry_count=0
   local gateway_url
@@ -612,41 +603,6 @@ create_default_admin_user() {
 
   ui_warn "User creation failed after ${max_retries} attempts; rerun ./start.sh after the platform stabilizes."
   return 1
-}
-
-# Optional FOLIO UI build + deploy, folded into a single path.
-build_and_deploy_ui() {
-  local ui_image
-  local kong_url keycloak_url
-
-  kong_url="$(host_kong_url)"
-  keycloak_url="$(host_keycloak_url)"
-
-  ui_phase 'Build and deploy UI'
-  ui_run 'configuring UI redirect URIs' \
-    env KONG_URL="${kong_url}" KEYCLOAK_URL="${keycloak_url}" \
-    bash "${PROJECT_ROOT}/misc/configure-ui-redirect.sh"
-
-  ui_step 'Building FOLIO UI image'
-  if ! KONG_URL="${kong_url}" KEYCLOAK_URL="${keycloak_url}" bash "${PROJECT_ROOT}/misc/build-folio-ui.sh"; then
-    ui_warn 'UI build failed. Retry with ./start.sh --ui.'
-    return 1
-  fi
-
-  ui_step 'Deploying FOLIO UI service'
-  if ! docker compose --profile ui up -d; then
-    ui_warn 'UI deployment failed. Retry with ./start.sh --ui.'
-    return 1
-  fi
-
-  # Run the health wait in a subshell so a UI-stage timeout (which exits the
-  # process) degrades to a soft failure instead of killing the whole bootstrap.
-  if ! ( wait_for_all_healthy ); then
-    ui_warn 'UI health wait timed out; the UI may still be starting.'
-    return 1
-  fi
-  ui_image="$(grep '^FOLIO_UI_IMAGE=' "${DOCKER_DIR}/.env.local" 2>/dev/null | cut -d= -f2 | tr -d ' ' || true)"
-  ui_ok "FOLIO UI deployed (${ui_image:-folioci/folio-ui:latest}); open http://localhost:${UI_PORT:-3000} (folio/folio)"
 }
 
 ################################################################################
@@ -867,10 +823,6 @@ run_bootstrap_flow() {
   if ! create_default_admin_user; then
     final_status='Partially ready'
     final_next_step='Rerun ./start.sh after the platform stabilizes.'
-  fi
-
-  if [[ "${BUILD_UI}" == 'true' ]]; then
-    build_and_deploy_ui || final_status='Partially ready'
   fi
 
   if smoke_check; then

@@ -30,9 +30,9 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 
 ## Build And Run
 
-- Full bootstrap: `./start.sh` (flags: `--actualize [--pre-release]`, `--native-sidecar`, `--rebuild-native-sidecar`, `--ui`, `--yes`, `--debug`).
+- Full bootstrap: `./start.sh` (flags: `--actualize [--pre-release]`, `--native-sidecar`, `--rebuild-native-sidecar`, `--yes`, `--debug`).
 - Stop/reset: `./stop.sh` (prompts to remove containers / clear volumes; `--yes` accepts defaults).
-- Version sync and UI/image workers are internal implementation details invoked by `./start.sh`.
+- Version sync and image workers are internal implementation details invoked by `./start.sh`.
 
 ## Validate And Test
 

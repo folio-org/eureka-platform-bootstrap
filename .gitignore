@@ -8,9 +8,6 @@ docker/.env.local*
 **/.temp/
 **/tmp/
 
-# UI build cache (disposable platform-complete clone)
-misc/.cache/
-
 # AI
 .codemie/
 .claude/

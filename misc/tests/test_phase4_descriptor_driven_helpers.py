@@ -245,8 +245,8 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
         "export MOD_USERS_VERSION=old\n"
         "export MOD_NOTES_VERSION=stale\n"
         "\n"
-        "FOLIO_UI_IMAGE=folioci/folio-ui:latest\n"
-        "TENANT_IDS=diku\n"
+        "FOLIO_KEYCLOAK_IMAGE=keycloak-latest\n"
+        "KC_SERVICE_CLIENT_ID=m2m-client\n"
         "\n"
         "# generated module images and versions\n"
         "export MOD_USERS_IMAGE=folioorg/mod-users:old\n",
@@ -276,8 +276,8 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
         "# generated module versions\n"
         "export MOD_USERS_VERSION=old\n"
         "export MOD_NOTES_VERSION=stale\n"
-        "FOLIO_UI_IMAGE=folioci/folio-ui:latest\n"
-        "TENANT_IDS=diku\n"
+        "FOLIO_KEYCLOAK_IMAGE=keycloak-latest\n"
+        "KC_SERVICE_CLIENT_ID=m2m-client\n"
         "# generated module images and versions\n"
         "export MOD_USERS_IMAGE=folioorg/mod-users:old\n",
         encoding="utf-8",
@@ -290,8 +290,8 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
       self.assertNotIn("# generated module images and versions\n", updated)
       self.assertNotIn("# BEGIN generated module runtime metadata", updated)
       self.assertIn("KC_LOGIN_CLIENT_SUFFIX=-login-app\n", updated)
-      self.assertIn("FOLIO_UI_IMAGE=folioci/folio-ui:latest\n", updated)
-      self.assertIn("TENANT_IDS=diku\n", updated)
+      self.assertIn("FOLIO_KEYCLOAK_IMAGE=keycloak-latest\n", updated)
+      self.assertIn("KC_SERVICE_CLIENT_ID=m2m-client\n", updated)
       self.assertNotIn("MOD_NOTES", updated)
       self.assertNotIn("MOD_USERS_IMAGE", updated)
       self.assertNotIn("MOD_USERS_VERSION", updated)

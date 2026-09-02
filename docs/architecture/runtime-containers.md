@@ -14,22 +14,18 @@ flowchart TD
   Mgmt["Manager Components\nmgr-applications, mgr-tenants, mgr-tenant-entitlements"]
   Modules["Backend Modules\nmod-users, mod-configuration, mod-permissions, mod-tags, mod-users-bl, mod-password-validator, mod-notes, mod-users-keycloak, mod-login-keycloak, mod-roles-keycloak, mod-settings, mod-scheduler"]
   Sidecars["Module Sidecars\nsc-users, sc-configuration, sc-permissions, sc-tags, sc-users-bl, sc-password-validator, sc-notes, sc-users-keycloak, sc-login-keycloak, sc-roles-keycloak, sc-settings, sc-scheduler"]
-  UI["Optional UI\nfolio-ui"]
 
   Host --> Core
   Host --> KC
   Host --> Mgmt
   Host --> Modules
   Host --> Sidecars
-  Host --> UI
 
   KC --> Mgmt
   Mgmt --> Sidecars
   Sidecars --> Modules
   Sidecars --> KC
   Sidecars --> Core
-  UI --> Core
-  UI --> KC
 ```
 
 ## Runtime Layers
@@ -42,7 +38,6 @@ flowchart TD
 | Manager components | `mgr-applications`, `mgr-tenants`, `mgr-tenant-entitlements` | Platform management APIs for app registration, tenant lifecycle, and entitlements | `docker/docker-compose.mgmt.yml`, `docker/.env*` |
 | Backend modules | `mod-*` services for the minimal application | Business and platform functionality used by FOLIO | `docker/docker-compose.minimal.module.yml`, `docker/.env*` |
 | Sidecar layer | `sc-*` services, one per backend module | Auth, tenancy, discovery, and request forwarding boundary in front of modules | `docker/docker-compose.minimal.sidecar.yml`, `docker/.env*` |
-| Optional UI | `folio-ui` | Browser-based front end built from `platform-complete` | `docker/docker-compose.ui.yml`, UI build scripts, `docker/.env*` |
 
 ## Layer Responsibilities
 
@@ -83,10 +78,6 @@ The sidecar layer is the public integration boundary for these modules. It handl
 - discovery-based routing support
 - request forwarding to the corresponding backend module
 
-### Optional UI
-
-The `folio-ui` service is intentionally optional. It depends on the core services being available, but the repository keeps it outside the mandatory backend bootstrap path.
-
 ## Current Runtime Sequencing
 
 The current runtime is expected to appear in a layered order:
@@ -97,6 +88,5 @@ The current runtime is expected to appear in a layered order:
 4. descriptors and discovery registration
 5. backend modules and sidecars
 6. tenant bootstrap and user creation
-7. optional UI
 
 That layered sequencing is central to understanding both the current design and the future simplification work.

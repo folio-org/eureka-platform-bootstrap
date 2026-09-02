@@ -17,7 +17,7 @@
 #
 # Usage:
 #   ./start.sh [--actualize [--pre-release]] [--native-sidecar]
-#              [--ui] [--yes] [--debug]
+#              [--yes] [--debug]
 
 set -euo pipefail
 
@@ -33,7 +33,6 @@ SIDECAR_MODE="${SIDECAR_MODE:-jvm}"
 BUILD_ARM_IMAGES="${BUILD_ARM_IMAGES:-false}"
 ACTUALIZE_MODULES="${ACTUALIZE_MODULES:-false}"
 PRE_RELEASE_MODE="${PRE_RELEASE_MODE:-false}"
-BUILD_UI="${BUILD_UI:-false}"
 export DEBUG="${DEBUG:-false}"
 ASSUME_YES="${ASSUME_YES:-false}"
 
@@ -53,7 +52,6 @@ Options:
                      it (GraalVM native binary in a lightweight image) if it is missing
   --rebuild-native-sidecar
                      Force a fresh native sidecar build (implies --native-sidecar)
-  --ui               Build and deploy the FOLIO UI after backend bootstrap
   --yes, -y          Assume "yes" for prompts (non-interactive)
   --debug            Stream all helper output instead of folding it
   -h, --help         Show this help
@@ -73,7 +71,6 @@ parse_args() {
       --pre-release)    PRE_RELEASE_MODE=true; shift ;;
       --native-sidecar) SIDECAR_MODE=native; shift ;;
       --rebuild-native-sidecar) SIDECAR_MODE=native; REBUILD_NATIVE_SIDECAR=true; shift ;;
-      --ui)             BUILD_UI=true; shift ;;
       --yes|-y)         ASSUME_YES=true; shift ;;
       --debug)          DEBUG=true; shift ;;
       -h|--help)        usage; exit 0 ;;

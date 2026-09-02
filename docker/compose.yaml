@@ -4,4 +4,3 @@ include:
   - path: docker-compose.mgmt.yml
   - path: docker-compose.minimal.module.yml
   - path: docker-compose.minimal.sidecar.yml
-  - path: docker-compose.ui.yml
