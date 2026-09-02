@@ -1,21 +1,42 @@
-x-core-service: &mgmt-service
+x-mgmt-service: &mgmt-service
   networks: [ fpm-net ]
-  env_file: [ env/mgr-components.env ]
   deploy:
     resources:
       limits:
         cpus: 1.0
         memory: 600m
-  depends_on:
-    db:
-      condition: service_healthy
-    keycloak:
-      condition: service_healthy
   profiles:
     - mgr-components
     - app-platform-minimal
-    - app-notification
-    - app-core-storage
+
+x-mgmt-env: &mgmt-env
+  DB_HOST: db
+  DB_PORT: 5432
+  MOD_AUTHTOKEN_URL: http://mod-authtoken:8081
+  JAVA_OPTIONS: "-Dokapi.url=${OKAPI_URL} -Djdk.internal.httpclient.disableHostnameVerification=true -Dmanagement.endpoints.web.exposure.include=*  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -XX:MaxRAMPercentage=75.0"
+  MT_URL: http://mgr-tenants:8081
+  AM_CLIENT_URL: http://mgr-applications:8081
+  KONG_ADMIN_URL: http://api-gateway:8001
+  KC_URL: http://keycloak:8080
+  KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+  KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET}
+  KAFKA_HOST: kafka
+  KAFKA_PORT: 9092
+  SECURITY_ENABLED: ${MGR_COMPONENTS_SECURITY_ENABLED}
+  KC_IMPORT_ENABLED: ${MGR_COMPONENTS_KEYCLOAK_IMPORT_ENABLED}
+  KC_INTEGRATION_ENABLED: ${MGR_COMPONENTS_KC_INTEGRATION_ENABLED}
+  KONG_INTEGRATION_ENABLED: ${MGR_COMPONENTS_KONG_INTEGRATION_ENABLED}
+  # mgr-applications self-registers its Kong service with this read_timeout (ms). The
+  # /applications descriptor POST runs onDescriptorCreate handlers that can exceed
+  # Kong's 60s default and 504 (the backend still commits). Match the value
+  # mgr-tenant-entitlements already defaults to. Empty -> Kong's 60s default.
+  KONG_READ_TIMEOUT: ${KONG_READ_TIMEOUT:-360000}
+  OKAPI_INTEGRATION_ENABLED: false
+  SECRET_STORE_TYPE: ${SECRET_STORE_TYPE}
+  SECRET_STORE_VAULT_TOKEN: ${SECRET_STORE_VAULT_TOKEN}
+  SECRET_STORE_VAULT_ADDRESS: ${SECRET_STORE_VAULT_ADDRESS}
+  MGR_APPLICATIONS_VALIDATION_MODE: ${MGR_APPLICATIONS_VALIDATION_MODE:-none}
+  VALIDATION_INTERFACE_INTEGRITY_ENABLED: ${VALIDATION_INTERFACE_INTEGRITY_ENABLED:-false}
 
 ###############################################
 ####---- Manager components containers ----####
@@ -24,16 +45,22 @@ services:
   mgr-applications:
     <<: *mgmt-service
     container_name: mgr-applications
-    image: ${MGR_APPLICATIONS_REPOSITORY}:${MGR_APPLICATIONS_VERSION}
+    image: ${MGR_APPLICATIONS_IMAGE}
     ports:
       - "9901:8081"
       - "10901:5005"
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -q --spider http://mgr-applications:8081/admin/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 10
     environment:
+      <<: *mgmt-env
       TE_URL: http://mgr-tenant-entitlements:8081
       DB_DATABASE: mgr_applications
       DB_USERNAME: mgr_applications_rw
@@ -44,16 +71,22 @@ services:
   mgr-tenants:
     <<: *mgmt-service
     container_name: mgr-tenants
-    image: ${MGR_TENANTS_REPOSITORY}:${MGR_TENANTS_VERSION}
+    image: ${MGR_TENANTS_IMAGE}
     ports:
       - "9902:8081"
       - "10902:5005"
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -q --spider http://mgr-tenants:8081/admin/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 10
     environment:
+      <<: *mgmt-env
       DB_DATABASE: mgr_tenants
       DB_USERNAME: mgr_tenants_rw
       DB_PASSWORD: ${MGR_TENANTS_DB_PASSWORD}
@@ -64,16 +97,22 @@ services:
   mgr-tenant-entitlements:
     <<: *mgmt-service
     container_name: mgr-tenant-entitlements
-    image: ${MGR_TENANT_ENTITLEMENTS_REPOSITORY}:${MGR_TENANT_ENTITLEMENTS_VERSION}
+    image: ${MGR_TENANT_ENTITLEMENTS_IMAGE}
     ports:
       - "9903:8081"
       - "10903:5005"
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -q --spider http://mgr-tenant-entitlements:8081/admin/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 10
     environment:
+      <<: *mgmt-env
       tenant.url: http://mgr-tenants:8081
       AM_CLIENT_URL: http://mgr-applications:8081
       MODULE_URL: http://mgr-tenant-entitlements:8081

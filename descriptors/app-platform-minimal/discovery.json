@@ -1,75 +1,75 @@
 {
   "discovery": [
     {
-      "id": "mod-configuration-5.12.0",
+      "id": "mod-configuration-5.13.0",
       "name": "mod-configuration",
-      "version": "5.12.0",
+      "version": "5.13.0",
       "location": "http://sc-configuration:8081"
     },
     {
-      "id": "mod-permissions-6.7.0",
+      "id": "mod-permissions-6.8.0",
       "name": "mod-permissions",
-      "version": "6.7.0",
+      "version": "6.8.0",
       "location": "http://sc-permissions:8081"
     },
     {
-      "id": "mod-tags-2.4.0",
+      "id": "mod-tags-3.0.0",
       "name": "mod-tags",
-      "version": "2.4.0",
+      "version": "3.0.0",
       "location": "http://sc-tags:8081"
     },
     {
-      "id": "mod-users-19.5.0",
+      "id": "mod-users-19.6.0",
       "name": "mod-users",
-      "version": "19.5.0",
+      "version": "19.6.0",
       "location": "http://sc-users:8081"
     },
     {
-      "id": "mod-users-bl-7.10.0",
+      "id": "mod-users-bl-8.0.0",
       "name": "mod-users-bl",
-      "version": "7.10.0",
+      "version": "8.0.0",
       "location": "http://sc-users-bl:8081"
     },
     {
-      "id": "mod-password-validator-3.4.0",
+      "id": "mod-password-validator-4.0.0",
       "name": "mod-password-validator",
-      "version": "3.4.0",
+      "version": "4.0.0",
       "location": "http://sc-password-validator:8081"
     },
     {
-      "id": "mod-login-keycloak-3.0.0",
+      "id": "mod-login-keycloak-4.0.1",
       "name": "mod-login-keycloak",
-      "version": "3.0.0",
+      "version": "4.0.1",
       "location": "http://sc-login-keycloak:8081"
     },
     {
-      "id": "mod-users-keycloak-3.0.0",
+      "id": "mod-users-keycloak-4.0.2",
       "name": "mod-users-keycloak",
-      "version": "3.0.0",
+      "version": "4.0.2",
       "location": "http://sc-users-keycloak:8081"
     },
     {
-      "id": "mod-roles-keycloak-3.0.0",
+      "id": "mod-roles-keycloak-4.0.4",
       "name": "mod-roles-keycloak",
-      "version": "3.0.0",
+      "version": "4.0.4",
       "location": "http://sc-roles-keycloak:8081"
     },
     {
-      "id": "mod-notes-7.0.0",
+      "id": "mod-notes-8.0.0",
       "name": "mod-notes",
-      "version": "7.0.0",
+      "version": "8.0.0",
       "location": "http://sc-notes:8081"
     },
     {
-      "id": "mod-scheduler-3.0.0",
+      "id": "mod-scheduler-4.0.2",
       "name": "mod-scheduler",
-      "version": "3.0.0",
+      "version": "4.0.2",
       "location": "http://sc-scheduler:8081"
     },
     {
-      "id": "mod-settings-1.1.0",
+      "id": "mod-settings-1.3.2",
       "name": "mod-settings",
-      "version": "1.1.0",
+      "version": "1.3.2",
       "location": "http://sc-settings:8081"
     }
   ]

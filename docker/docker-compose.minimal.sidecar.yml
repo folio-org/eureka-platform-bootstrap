@@ -1,11 +1,13 @@
 x-sidecar-module: &sidecar-module
-  image: ${FOLIO_MODULE_SIDECAR_REPOSITORY}:${FOLIO_MODULE_SIDECAR_VERSION}
+  image: ${FOLIO_MODULE_SIDECAR_IMAGE}
   networks: [ fpm-net ]
+  restart: unless-stopped
   healthcheck:
-    test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/admin/health || exit 1"]
+    test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/admin/health 2>/dev/null || (echo > /dev/tcp/localhost/8081) 2>/dev/null || exit 1"]
     interval: 30s
     timeout: 10s
     retries: 10
+    start_period: 10s
   depends_on:
     mgr-applications:
       condition: service_healthy
@@ -16,13 +18,14 @@ x-sidecar-module: &sidecar-module
   deploy:
     resources:
       limits:
-        memory: 224m
-      reservations:
-        memory: 192m
+        memory: ${SIDECAR_MEMORY_LIMIT:-224m}
 
 x-sidecar-env: &sidecar-env
   KC_URL: http://keycloak:8080
-  JAVA_OPTIONS: "-XX:+UseZGC -Xms64m -Xmx64m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+  # `-` (not `:-`) so the bootstrap can pass an explicit empty value in native
+  # mode: a GraalVM native sidecar ignores JAVA_OPTIONS, so these JVM heap/GC/jdwp
+  # flags only apply to the JVM image (the default when the var is unset).
+  JAVA_OPTIONS: ${SIDECAR_JAVA_OPTIONS--XX:+UseZGC -Xms64m -Xmx64m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005}
   TM_CLIENT_URL: http://mgr-tenants:8081
   AM_CLIENT_URL: http://mgr-applications:8081
   TE_CLIENT_URL: http://mgr-tenant-entitlements:8081
@@ -38,6 +41,11 @@ x-sidecar-env: &sidecar-env
   SIDECAR_FORWARD_UNKNOWN_REQUESTS: true
   SIDECAR_FORWARD_UNKNOWN_REQUESTS_DESTINATION: http://api-gateway:8000
   QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: 1
+  FILTERS_TRACING_ON_ERROR: true
+  SC_LOG_LEVEL: DEBUG
+  KC_JWKS_BASE_URL: http://keycloak:8080/
+  KC_URI_VALIDATION_ENABLED: false
+  HANDLER_EGRESS_IGNORE_SYSTEM_USER_TOKEN_ERROR: true
 
 ###############################################
 ####---- app-platform-minimal sidecars ----####

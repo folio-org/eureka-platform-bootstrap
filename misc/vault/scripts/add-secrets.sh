@@ -14,12 +14,20 @@ curl -X POST \
    "$secretsUri/config"
 
 # create global secrets (in folio/master)
+#
+# Keep both layouts:
+# - plain keys are used by local operator helpers that read secret/data/folio/<tenant>
+# - folio_master_* aliases are used by mgr-components secret-store integration
 secretsData='{
   "data": {
     "'$KC_ADMIN_CLIENT_ID'": "'$KC_ADMIN_CLIENT_SECRET'",
+    "folio_master_'$KC_ADMIN_CLIENT_ID'": "'$KC_ADMIN_CLIENT_SECRET'",
     "mgr-applications": "supersecret",
+    "folio_master_mgr-applications": "supersecret",
     "mgr-tenants": "supersecret",
-    "mgr-tenant-entitlements": "supersecret"
+    "folio_master_mgr-tenants": "supersecret",
+    "mgr-tenant-entitlements": "supersecret",
+    "folio_master_mgr-tenant-entitlements": "supersecret"
   }
 }'
 
@@ -32,4 +40,3 @@ curl -X POST \
 # list secrets created
 echo "$(date -u +%FT%T.%3NZ) [INFO] Secrets in folio/master:"
 curl -X GET -H "X-Vault-Token: $VAULT_TOKEN" "$secretsUri"/data/folio/master
-

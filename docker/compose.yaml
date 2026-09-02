@@ -1,0 +1,7 @@
+include:
+  - path: docker-compose.core.yml
+  - path: docker-compose.keycloak.yml
+  - path: docker-compose.mgmt.yml
+  - path: docker-compose.minimal.module.yml
+  - path: docker-compose.minimal.sidecar.yml
+  - path: docker-compose.ui.yml

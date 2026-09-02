@@ -1,12 +1,40 @@
-x-okapi-env: &okapi-module
+x-folio-module-env: &folio-module-env
+  ENV: folio
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_DATABASE: okapi
+  DB_USERNAME: okapi_rw
+  DB_PASSWORD: ${OKAPI_DB_PASSWORD}
+  JAVA_OPTIONS: "-Dokapi.url=${OKAPI_URL} -Djdk.internal.httpclient.disableHostnameVerification=true -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -XX:MaxRAMPercentage=80.0"
+  KAFKA_HOST: kafka
+  KAFKA_PORT: 9092
+  OKAPI_URL: ${OKAPI_URL}
+  KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
+
+x-folio-module: &folio-module
   networks: [ fpm-net ]
-  env_file: [ env/okapi-modules.env ]
   deploy:
     resources:
       limits:
         memory: 384m
       reservations:
         memory: 256m
+  # Native readiness signal for the backend module itself (the sidecar only
+  # reports its own health, not the module's). This lets wait_for_all_healthy
+  # gate on real module readiness instead of a host-port poll.
+  healthcheck:
+    test: [ "CMD-SHELL", "wget -q --spider http://localhost:8081/admin/health || exit 1" ]
+    interval: 30s
+    timeout: 10s
+    retries: 10
+    start_period: 30s
+  # Modules need the database up before they can initialise. Kafka is not
+  # required at startup (modules tolerate a late broker), so it is omitted.
+  depends_on:
+    db:
+      condition: service_healthy
+  environment:
+    <<: *folio-module-env
 
 x-vault-env: &vault-env
   SECRET_STORE_TYPE: ${SECRET_STORE_TYPE}
@@ -18,81 +46,82 @@ x-vault-env: &vault-env
 ##############################################
 services:
   mod-users:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-users
-    image: ${MOD_USERS_REPOSITORY}:${MOD_USERS_VERSION}
-    profiles: [ app-platform-minimal, legacy ]
+    image: ${MOD_USERS_IMAGE}
+    profiles: [ app-platform-minimal ]
     ports:
       - "9001:8081"
       - "10001:5005"
 
   mod-configuration:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-configuration
-    image: ${MOD_CONFIGURATION_REPOSITORY}:${MOD_CONFIGURATION_VERSION}
+    image: ${MOD_CONFIGURATION_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9002:8081"
       - "10002:5005"
 
   mod-permissions:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-permissions
-    image: ${MOD_PERMISSIONS_REPOSITORY}:${MOD_PERMISSIONS_VERSION}
-    profiles: [ app-platform-minimal, legacy ]
+    image: ${MOD_PERMISSIONS_IMAGE}
+    profiles: [ app-platform-minimal ]
     ports:
       - "9003:8081"
       - "10003:5005"
 
   mod-tags:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-tags
-    image: ${MOD_TAGS_REPOSITORY}:${MOD_TAGS_VERSION}
+    image: ${MOD_TAGS_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9004:8081"
       - "10004:5005"
 
   mod-users-bl:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-users-bl
-    image: ${MOD_USERS_BL_REPOSITORY}:${MOD_USERS_BL_VERSION}
+    image: ${MOD_USERS_BL_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9005:8081"
       - "10005:5005"
 
   mod-password-validator:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-password-validator
-    image: ${MOD_PASSWORD_VALIDATOR_REPOSITORY}:${MOD_PASSWORD_VALIDATOR_VERSION}
+    image: ${MOD_PASSWORD_VALIDATOR_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9007:8081"
       - "10007:5005"
 
   mod-notes:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-notes
-    image: ${MOD_NOTES_REPOSITORY}:${MOD_NOTES_VERSION}
+    image: ${MOD_NOTES_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9008:8081"
       - "10008:5005"
 
   mod-users-keycloak:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-users-keycloak
-    image: ${MOD_USERS_KEYCLOAK_REPOSITORY}:${MOD_USERS_KEYCLOAK_VERSION}
+    image: ${MOD_USERS_KEYCLOAK_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9009:8081"
       - "10009:5005"
     environment:
-      <<: *vault-env
+      <<: [ *folio-module-env, *vault-env ]
       KC_URL: http://keycloak:8080
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
       KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
+      INCLUDE_ONLY_VISIBLE_PERMISSIONS: false
       JAVA_OPTIONS: >-
         -Dhost=okapi
         -Dstorage=postgres
@@ -105,54 +134,56 @@ services:
         -XX:MaxRAMPercentage=70.0
 
   mod-login-keycloak:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-login-keycloak
-    image: ${MOD_LOGIN_KEYCLOAK_REPOSITORY}:${MOD_LOGIN_KEYCLOAK_VERSION}
+    image: ${MOD_LOGIN_KEYCLOAK_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9010:8081"
       - "10010:5005"
     environment:
-      <<: *vault-env
+      <<: [ *folio-module-env, *vault-env ]
       KC_URL: http://keycloak:8080
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
       KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
       KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KC_ADMIN_TOKEN_TTL: 55s
+      LOGIN_COOKIE_SAMESITE: LAX
       X_OKAPI_TOKEN_HEADER_ENABLED: true
 
   mod-roles-keycloak:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-roles-keycloak
-    image: ${MOD_ROLES_KEYCLOAK_REPOSITORY}:${MOD_ROLES_KEYCLOAK_VERSION}
+    image: ${MOD_ROLES_KEYCLOAK_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9011:8081"
       - "10011:5005"
     environment:
-      <<: *vault-env
+      <<: [ *folio-module-env, *vault-env ]
       KC_URL: http://keycloak:8080
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
       KC_LOGIN_CLIENT_SUFFIX: ${KC_LOGIN_CLIENT_SUFFIX}
 
   mod-settings:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-settings
-    image: ${MOD_SETTINGS_REPOSITORY}:${MOD_SETTINGS_VERSION}
+    image: ${MOD_SETTINGS_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9012:8081"
       - "10012:5005"
 
   mod-scheduler:
-    <<: *okapi-module
+    <<: *folio-module
     container_name: mod-scheduler
-    image: ${MOD_SCHEDULER_REPOSITORY}:${MOD_SCHEDULER_VERSION}
+    image: ${MOD_SCHEDULER_IMAGE}
     profiles: [ app-platform-minimal ]
     ports:
       - "9020:8081"
       - "10020:5005"
     environment:
-      <<: *vault-env
+      <<: [ *folio-module-env, *vault-env ]
       JAVA_OPTIONS: >-
         -Dokapi.url=http://api-gateway:8000
         -Djdk.internal.httpclient.disableHostnameVerification=true

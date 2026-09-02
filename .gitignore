@@ -1,5 +1,24 @@
 /.idea/
 
+__pycache__/
+misc/__pycache__/
+*.pyc
+
 docker/.env.local*
 **/.temp/
 **/tmp/
+
+# UI build cache (disposable platform-complete clone)
+misc/.cache/
+
+# AI
+.codemie/
+.claude/
+.opencode/
+.opencode/auto-memory/
+.agents/
+.superpowers/
+.tasks/
+.zcode/
+docs/superpowers/
+skills-lock.json
