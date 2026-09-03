@@ -1,0 +1,7 @@
+interface:
+  display_name: "Local Eureka Environment"
+  short_description: "Operate the local FOLIO Eureka environment from any repository"
+  default_prompt: "Use $local-eureka-env to work with the local FOLIO Eureka environment."
+
+policy:
+  allow_implicit_invocation: true

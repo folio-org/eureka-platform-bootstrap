@@ -1,617 +1,119 @@
 # eureka-platform-bootstrap
 
-Provides docker-based minimal eureka platform
+Compose-centered local FOLIO Eureka `app-platform-minimal` environment definition
+and bootstrap repository.
 
-# Table of contents
+## Requirements
 
-<!-- TOC -->
-* [eureka-platform-bootstrap](#eureka-platform-bootstrap)
-* [Table of contents](#table-of-contents)
-* [Run applications in docker](#run-applications-in-docker)
-  * [Script environment variables](#script-environment-variables)
-    * [Module versions](#module-versions)
-  * [Hosts file configuration](#hosts-file-configuration)
-  * [Additional images build](#additional-images-build)
-  * [Generate local credentials and configuration](#generate-local-credentials-and-configuration)
-  * [Update module versions](#update-module-versions)
-  * [Deploying core services](#deploying-core-services)
-  * [Deploying mgr-components](#deploying-mgr-components)
-  * [app-platform-minimal application registration](#app-platform-minimal-application-registration)
-  * [Registration of application descriptor](#registration-of-application-descriptor)
-    * [app-platform-minimal discovery information](#app-platform-minimal-discovery-information)
-  * [app-platform-minimal deployment](#app-platform-minimal-deployment)
-    * [Running containers](#running-containers)
-  * [Create a tenant](#create-a-tenant)
-    * [Enable (entitle) app-platform-minimal for tenant](#enable-entitle-app-platform-minimal-for-tenant)
-  * [Creating a user](#creating-a-user)
-    * [Generate a module-to-module client secret](#generate-a-module-to-module-client-secret)
-      * [Vault service client secret retrieval](#vault-service-client-secret-retrieval)
-      * [Keycloak service client retrieval](#keycloak-service-client-retrieval)
-      * [Generating service access token](#generating-service-access-token)
-    * [Create a user: folio](#create-a-user-folio)
-    * [Create folio user credentials](#create-folio-user-credentials)
-    * [Login folio user](#login-folio-user)
-* [Additional images](#additional-images)
-  * [folio-module-sidecar](#folio-module-sidecar)
-* [Miscellaneous scripts](#miscellaneous-scripts)
-  * [module-updater](#module-updater)
-  * [images-builder](#images-builder)
-  * [Remove all docker volumes related to the deployment](#remove-all-docker-volumes-related-to-the-deployment)
-  * [Module version actualizer](#module-version-actualizer)
-  * [Single command to deploy local environment](#single-command-to-deploy-local-environment)
-  * [Verified versions](#verified-versions)
-      * [Docker version](#docker-version)
-      * [Docker-compose CLI version](#docker-compose-cli-version)
-      * [Python](#python)
-<!-- TOC -->
-
-# Run applications in docker
-
-Required tools:
-
-- Docker
-- Python v3.10+ and pip
-- Java 17
+- Docker with Compose v2.24+ (allocate 12GB+ memory; the bootstrap warns below that)
+- Python 3.10+
+- Java 17+
 - Maven
+- `jq`
+- `curl`
 
-## Script environment variables
-
-This variables can be overwritten in `.env.local.credentials`
-
-| Variable                               | Default value                 | Description                                                                                    |
-|----------------------------------------|-------------------------------|------------------------------------------------------------------------------------------------|
-| POSTGRES_PASSWORD                      | postgres_admin                | Postgres Database password                                                                     |
-| KC_DB_PASSWORD                         | keycloak_admin                | Keycloak database password                                                                     |
-| KONG_DB_PASSWORD                       | kong_admin                    | Kong database password                                                                         |
-| OKAPI_DB_PASSWORD                      | okapi_admin                   | Okapi database password (all modules will use this database to create tenant specific schemas) |
-| MGR_APPLICATIONS_DB_PASSWORD           | mgr_applications_admin        | mgr-applications database password                                                             |
-| MGR_TENANTS_DB_PASSWORD                | mgr_tenants_admin             | mgr-tenants database password                                                                  |
-| MGR_TENANT_ENTITLEMENTS_DB_PASSWORD    | mgr_tenant_entitlements_admin | mgr-tenant-entitlements database password                                                      |
-| KC_ADMIN_PASSWORD                      | admin                         | Keycloak admin password                                                                        |
-| KC_ADMIN_CLIENT_SECRET                 | be-admin-client-secret        | Keycloak admin client secret                                                                   |
-
-> **_NOTE:_**  _It is recommended to generate your own set of credentials for a new deployment instead of using default
-> values, see how to generate [deployment credentials](#generate-local-credentials-and-configuration)._
-
-This variables can be overwritten in `.env.local`:
-
-### Module versions
-| Variable                           | Default value                   | Description                                                                                  |
-|------------------------------------|---------------------------------|----------------------------------------------------------------------------------------------|
-| KC_LOGIN_CLIENT_SUFFIX             | -login-app                      | a suffix for a tenant client that will perform all authentication and authorization requests |
-| KC_SERVICE_CLIENT_ID               | m2m-client                      | Name of service client (participated in module-to-module requests)                           |
-| KC_ADMIN_CLIENT_ID                 | be-admin-client                 | Keycloak admin client id                                                                     |
-| MGR_TENANTS_VERSION                | latest                          | Docker image version for `mgr-tenants`                                                       |
-| MGR_TENANTS_VERSION                | latest                          | Docker image version for `mgr-tenants`                                                       |
-| MGR_TENANTS_REPOSITORY             | folioci/mgr-tenants             | Docker repository for `mgr-tenants`                                                          |
-| MGR_APPLICATIONS_VERSION           | latest                          | Docker image version for `mgr-applications`                                                  |
-| MGR_APPLICATIONS_REPOSITORY        | folioci/mgr-applications        | Docker repository for `mgr-applications`                                                     |
-| MGR_TENANT_ENTITLEMENTS_VERSION    | latest                          | Docker image version for `mgr-tenant-entitlements`                                           |
-| MGR_TENANT_ENTITLEMENTS_REPOSITORY | folioci/mgr-tenant-entitlements | Docker repository for `mgr-tenant-entitlements`                                              |
-| FOLIO_MODULE_SIDECAR_VERSION       | latest                          | Docker image version for `folio-module-sidecar`                                              |
-| FOLIO_MODULE_SIDECAR_REPOSITORY    | folioci/folio-module-sidecar    | Docker repository for `folio-module-sidecar`                                                 |
-
-> **_NOTE:_** _Folio module versions are populated with the following script (based on application descriptor):_
-> ```shell
-> python ./misc/docker-module-updater/run.py
-> ```
-
-## Hosts file configuration
-
-Keycloak and kafka uses specific settings in this deployment that prevents them accessing locally. To make it possible,
-`hosts` file must be updated with following lines:
-
-```text
-127.0.0.1     keycloak
-127.0.0.1     kafka
-```
-
-## Additional images build
-
-Additional images are required to built before running `eureka-platform-bootstrap` in docker.
-
-This command will build custom vault image, with autoconfiguration for initial credentials:
-
-```shell
-sh ./misc/build-images.sh
-```
-
-Before all the steps, make sure that you are in the `docker` directory:
-
-```shell
-cd docker
-```
-
-## Generate local credentials and configuration
-
-To set local credentials and configuration a following script must be executed:
-
-```shell
-sh ./set-local-credentials.sh
-```
-
-> **_NOTE:_** _This step is optional, however it will provide more secure deployment for local development_
-> In addition, once credentials is set and core profile is running - changing them will break deployment, and the
-> workaround is to manually update them in `.env.local.crendentials` and in corresponding container or to start
-> deployment from scratch by removing docker volumes (before executing a script - deployment must be stopped with
-> ```./stop-docker-containers.sh```):
-> ```shell
-> docker volume rm -f folio-platform-minimal_db folio-platform-minimal_kafka-data folio-platform-minimal_vault-data
-> ```
-
-## Update module versions
-
-> **_NOTE:_** _This step is optional, execute the following command only if you have modified app-platform-miniaml
-module
-> descriptor_
-
-```shell
-python ../misc/docker-module-updater/run.py
-```
-
-## Deploying core services
-
-Executing the following command will run containers for core infrastructure for Eureka deployment:
-
-- Database (PosgreSQL with configured databases and credentials)
-- api-gateway: Kong
-- Keycloak (cluster deployment 1 node + load balancer (nginx))
-- Apache Kafka + Kafka UI
-
-```shell
-./start-docker-containers.sh -p core
-```
-
-_Checklist before going to the next step:_
-
-1. _Database must be available with configured admin client (credentials: `postgres:{{POSTGRES_PASSWORD}}`):_
-   ```
-   jdbc:postgresql://localhost:5432/postgres
-   ```
-
-2. _Check Keycloak admin dashboard (credentials: `admin:{{KC_ADMIN_PASSWORD}}`):_
-   ```
-   http://localhost:8080
-   ```
-   > **_NOTE:_**  _If keycloak is not available (502 Bad Gateway), try to execute:\
-   > `./dc.sh restart keycloak`_
-
-3. _Check Kong Manager Dashboard:_
-   ```
-   http://localhost:8002
-   ```
-   > **_NOTE:_** _If kong is not available, removing it by ```./dc.sh down api-gateway``` and then enabling it again
-   > with ```./dc.sh up --data api-gateway``` should resolve this issue_
-
-4. _Check Kafka UI:_
-   ```
-   http://localhost:9080
-   ```
-5. _Check Vault:_
-  ```
-  http://localhost:8200/
-  ```
-  _Unseal token can be retrieved with script:_
-  ```
-  sh ./misc/get-vault-token.sh
-  ```
-
-## Deploying mgr-components
-
-Before initializing `mgr-components`, Vault access must be provided via env variable - `SECRET_STORE_VAULT_TOKEN`. The
-following script will populate it in `.env.local`:
-
-```
-sh ./misc/populate-vault-token.sh
-```
-
-> **_NOTE:_** _All local configuration lives in `.env.local` file, in the `docker/` directory, if you want to customize
-> deployment - use this file, it is excluded from git, so pulling latest changes from master or other branches will be
-> simple._
-
-> **_NOTE:_** _mgr-components versions can be re-configured with following env variables in `.env.local`:_
-> ```
-> export MGR_TENANTS_VERSION={{newVersion}}
-> export MGR_TENANTS_REPOSITORY={{newRepositoryName}}
-> export MGR_APPLICATIONS_VERSION={{newVersion}}
-> export MGR_APPLICATIONS_REPOSITORY={{newRepositoryName}}
-> export MGR_TENANT_ENTITLEMENTS_VERSION={{newVersion}}
-> export MGR_TENANT_ENTITLEMENTS_REPOSITORY={{newRepositoryName}}
-> ```
-> _`eureka-platform-bootstrap` uses the latest tag from folioci docker public registry, to update and pull the latest
-> tags `sh ./docker/dc.sh pull` can be used._
-
-Executing this command will run containers for:
-
-- mgr-tenants (tenant management)
-- mgr-applications (application management + discovery management)
-- mgr-tenant-entitlements (tenant application management)
-
-```shell
-./start-docker-containers.sh -p mgr-components
-```
-
-Wait until they are available:
-
-```shell
-curl -w"\n\n" -sS --retry-all-errors --retry 10 -D - http://localhost:9901/admin/health
-curl -w"\n\n" -sS --retry-all-errors --retry 8 -D - http://localhost:9902/admin/health
-curl -w"\n\n" -sS --retry-all-errors --retry 8 -D - http://localhost:9903/admin/health
-```
-
-Adding a new application to `mgr-applications` will require following steps:
-
-* To expose your pre-defined variables to current terminal
-  ```shell
-  source .env.local
-  ```
-
-* Get system access token:\
-  _This token is used to communicate with mgr-components_
-  ```shell
-  export KC_ADMIN_CLIENT_ID={{value from .env.local, if not defined - from .env}}
-  export KC_ADMIN_CLIENT_SECRET={value from .env.local.credentials, if not defined - from .env}
-  ```
-
-*  _If you have not set up local credentials, you can use default values:_
-  ```shell
-  export KC_ADMIN_CLIENT_ID=be-admin-client
-  export KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
-  ```
-
-
-  ```shell
-  systemAccessToken=$(curl -X POST --silent \
-    --header "Content-Type: application/x-www-form-urlencoded" \
-    --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
-    --data-urlencode "grant_type=client_credentials" \
-    --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
-    "http://keycloak:8080/realms/master/protocol/openid-connect/token" \
-    | jq -r ".access_token")
-  ```
-  > **_NOTE:_** _Access token lifespan can be increased in Keycloak to 30 minutes:_
-  > - Login to keycloak
-  > - Select master realm
-  > - Then go to Realm Settings -> Tokens -> Access Tokens
-  > - Increase the value of `Access Token Lifespan`
-
-  The following command will print access token value (Optional):
-  ```shell
-  echo "$systemAccessToken"
-  ```
-
-* Verify that mgr-components are available (Optional)
-  ```shell
-  curl -X GET --silent \
-    --header "Content-Type: application/json" \
-    --header "x-okapi-token: ${systemAccessToken}" \
-    "http://localhost:8000/tenants" | jq
-  ```
-
-  ```shell
-  curl -X GET --silent \
-    --header "Content-Type: application/json" \
-    --header "x-okapi-token: ${systemAccessToken}" \
-    "http://localhost:8000/applications" | jq
-  ```
-
-  ```shell
-  curl -X GET --silent \
-    --header "Content-Type: application/json" \
-    --header "x-okapi-token: ${systemAccessToken}" \
-    "http://localhost:8000/entitlements" | jq
-  ```
-
-  > **_NOTE:_** _Responses must be `200 OK`, if not - check the container logs to find the issue_
-
-## app-platform-minimal application registration
-
-`app-platform-minimal` contains basic functionality for Eureka platform:
-
-* User and AuthUsers management (`mod-users-keycloak` + `mod-users` + `mod-users-bl`)
-* Authentication and authorization (`keycloak` + `mod-login-keycloak` + sidecars)
-* Capability/Role/Policy management (`mod-roles-keycloak`)
-* Scheduled timers support (`mod-scheduler`)
-* Notes (`mod-notes`)
-* Tenant settings management (`mod-settings`)
-
-When the previous step is finished, `mgr-applications` is ready to accept applications, and sidecars will require
-pre-defined application to load bootstrap information.
-
-## Registration of application descriptor
-
-This command adds app-platform-minimal to `mgr-applications`:
-
-```shell
-curl -X POST --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data "@../descriptors/app-platform-minimal/descriptor.json" \
-  "http://localhost:8000/applications" | jq
-```
-
-> **_NOTE:_** Created application can be retrieved using the following command:
->
-> ```shell
-> curl -X GET --silent \
->   --header "Content-Type: application/json" \
->   --header "x-okapi-token: ${systemAccessToken}" \
->   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.2?full=true" | jq
-> ```
-
-### app-platform-minimal discovery information
-
-This command will provide discovery information for all modules in `app-platform-minimal`:
-
-```shell
-curl -X POST --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data "@../descriptors/app-platform-minimal/discovery.json" \
-  "http://localhost:8000/modules/discovery" | jq
-```
-
-> **_NOTE:_** Created application discovery data can be retrieved using the following command:
->
->
-> (Optional) Stored application discovery information
-> ```shell
-> curl -X GET --silent \
->   --header "Content-Type: application/json" \
->   --header "x-okapi-token: ${systemAccessToken}" \
->   "http://localhost:8000/applications/app-platform-minimal-0.0.17-SNAPSHOT.2/discovery?limit=100" | jq
-> ```
-
-## app-platform-minimal deployment
-
-> **_NOTE:_** _it's also possible to run native image build by following the instruction in `folio-module-sidecar`
-project, image values can be customized in `.env.local`_:
-> ```shell
-> export FOLIO_MODULE_SIDECAR_VERSION={{folio-module-sidecar-version}}
-> export FOLIO_MODULE_SIDECAR_REPOSITORY={{folio-module-sidecar-repostitory}}
-> ```
-
-### Running containers
-
-The following command will run containers that belongs to `app-platform-minimal`:
-
-```shell
-./start-docker-containers.sh -p app-platform-minimal
-```
-
-> **_NOTE:_** _Verify manually that all containers started without any errors by checking logs of each container and
-> sidecars (`mod-` and `sc-` prefixes in search)_
-
-## Create a tenant
-
-The following command will create and save tenant id as variable:
-
-```shell
-curl -X POST --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data '{"name": "test", "description": "Test Tenant"}' \
-  "http://localhost:8000/tenants" | jq
-```
-
-Command to get test tenant id:
-
-```shell
-testTenantId=$(curl -X GET --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  "http://localhost:8000/tenants?query=name==test" | jq -r ".tenants[0].id")
-```
-
-This command should print tenant identifier
-
-```shell
-echo "${testTenantId}"
-```
-
-### Enable (entitle) app-platform-minimal for tenant
-
-The following command will install `app-platform-minimal` for prepared `test` tenant:
-
-```shell
-curl -X POST --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "app-platform-minimal-0.0.17-SNAPSHOT.2" ] }' \
-  "http://localhost:8000/entitlements?ignoreErrors=true" | jq
-```
-
-Await for successful result, entitlements for tenant can be checked with command
-
-```shell
-curl -X GET --silent \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  "http://localhost:8000/entitlements?query=tenantId=${testTenantId}" | jq
-```
-
-## Creating a user
-
-### Generate a module-to-module client secret
-
-This JWT token provides admin access to folio system (all permissions included)
-
-
-> **_NOTE:_** _By default name of client is: ```sidecar-module-access-client```, but it can be redefined by
-variable: ```KC_SERVICE_CLIENT_ID```_
-
-`{{KC_SERVICE_CLIENT_SECRET}}` can be obtained from Vault or from Keycloak.
-
-#### Vault service client secret retrieval
-
-To retrieve service client secret from vault
-
-- Open Vault at ```http://localhost:8200/ui/vault/secrets```
-- Open following folder in sequence: `secret/` -> `folio/` -> `test/`
-- Copy data from `${KC_SERVICE_CLIENT_ID}` field (`m2m-client` by default)
-
-#### Keycloak service client retrieval
-
-To retrieve service token from Keycloak:
-
-- Login to keycloak
-- Select `test` realm
-- Then go to Clients -> `${KC_SERVICE_CLIENT_ID}` Client (`m2m-client` by default) -> Credentials
-- Copy value from `Client Secret` field
-
-#### Generating service access token
-
-export environment variables:
-
-```shell
-export KC_SERVICE_CLIENT_ID={{value from .env.local, if not defined - from .env}}
-export KC_SERVICE_CLIENT_SECRET={{value from previous step}}
-```
-
-```shell
-accessToken=$(curl -X POST --silent \
-  --header "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "client_id=${KC_SERVICE_CLIENT_ID}" \
-  --data-urlencode "grant_type=client_credentials" \
-  --data-urlencode "client_secret=${KC_SERVICE_CLIENT_SECRET}" \
-  "http://keycloak:8080/realms/test/protocol/openid-connect/token" \
-  | jq -r ".access_token")
-```
-
-### Create a user: folio
-
-```shell
-user=$(curl -X POST --silent \
-  --header 'x-okapi-tenant: test' \
-  --header 'Content-Type: application/json' \
-  --header "x-okapi-token: ${accessToken}" \
-  --data-raw '{
-      "active": true,
-      "departments": [],
-      "proxyFor": [],
-      "type": "patron",
-      "username": "folio",
-      "personal": {
-        "lastName": "Test",
-        "firstName": "Test",
-        "email": "test_user@example.com",
-        "addresses": []
-      }
-    }' \
-  'http://localhost:8000/users-keycloak/users')
-
-echo $user | jq
-```
-
-### Create folio user credentials
-
-```shell
-user_id=$(echo $user | jq -r ".id")
-
-curl -X POST --silent  \
-  --header 'x-okapi-tenant: test' \
-  --header 'Content-Type: application/json' \
-  --header "x-okapi-token: ${accessToken}" \
-  --data '{ "username": "folio", "userId": "'${user_id}'", "password": "folio" }' \
-  'http://localhost:8000/authn/credentials' | jq
-```
-
-### Login folio user
-
-```shell
-curl -X POST --silent  \
-  --header 'x-okapi-tenant: test' \
-  --header 'Content-Type: application/json' \
-  --data '{ "username": "folio", "password": "folio" }' \
-  'http://localhost:8000/authn/login' | jq
-```
-
-# Additional images
-
-Additional images are build with the following command:
-
-```shell
-sh ./misc/build-images.sh
-```
-
-This image provides HashiCorp Vault container (with some automation) to store secret for Folio platform
-
-## folio-module-sidecar
-
-# Miscellaneous scripts
-
-## module-updater
-
-Updates docker deployment and discovery information versions according
-to the [Application Descriptor](descriptors/app-platform-minimal/descriptor.json)
-
-```shell
-python ./misc/docker-module-updater/run.py
-```
-
-## images-builder
-Run the following command to build the images for you current platform architecture from the `eureka-platform-bootstrap` folder:
-More: [Images Builder](misc/images-builder/README.md)
+## Quick start
 
 ```bash
-./misc/images-builder/build.sh
-```
-
-## Remove all docker volumes related to the deployment
-Run the following command to remove all docker volumes related to the deployment:
-
-```shell
-./docker/remove-folio-platform-volumes.sh
-````
-
-## Module version actualizer
-This script updates module versions in the application descriptor (descriptor.json) to the latest SNAPSHOT or release versions available in the FOLIO Registry.
-Choose whether to use SNAPSHOT versions (y) or stable releases (n).
-```shell
-python3 misc/module-version-actualizer/run.py
-```
-
-## Single command to deploy local environment
-The script deploys local environment with default settings. Covered steps:
-- Start `core` services
-- Start `mgr-components`
-- Register `app-platform-minimal` application
-- Deploy `app-platform-minimal`
-- Create a `test` tenant
-- Enable `app-platform-minimal` application for tenant
-
-Run the following command to deploy local environment:
-
-```shell
 ./start.sh
 ```
 
-## Verified versions
+`./start.sh` is the single entrypoint. It:
 
-#### Docker version
+- checks required tools
+- asks at most a couple of questions (actualize module versions; on Apple Silicon,
+  build ARM images)
+- creates or updates local env files (`docker/.env.local`, `docker/.env.local.credentials`)
+- starts `core`, then `mgr-components`, then the bundled `app-platform-minimal`
+  services by name
+- registers the bundled application descriptor and discovery metadata
+- creates tenant `diku` and the default admin user `folio/folio`
+- finishes with a short smoke check (api-gateway reachable, tenant token, `diku`
+  exists, capabilities reachable)
 
-```shell
-> docker version
+### Options
 
-Client: Docker Engine - Community
- Version:           27.1.1
-
-Server: Docker Engine - Community
- Engine:
-  Version:          27.1.1
-  API version:      1.46 (minimum version 1.24)
+```bash
+./start.sh --actualize [--pre-release]       # refresh module versions first (SNAPSHOT with --pre-release)
+./start.sh --native-sidecar                  # native folio-module-sidecar image (built if missing)
+./start.sh --rebuild-native-sidecar          # force a fresh native sidecar build
+./start.sh --yes                             # non-interactive (assume defaults / yes)
+./start.sh --debug                           # stream all helper output
 ```
 
-#### Docker-compose CLI version
+## How it is organized
 
-```shell
-> docker compose version
-Docker Compose version v2.29.1
+`start.sh` stays thin; the logic lives in focused libraries:
+
+| File | Responsibility |
+| --- | --- |
+| `start.sh` | argument parsing, prompts, tool checks, run the flow |
+| `misc/bootstrap-engine.sh` | phase orchestration (`run_bootstrap_flow`) and local setup |
+| `misc/lib/folio-common.sh` | logging, config loading, output helpers, dependency checks |
+| `misc/lib/folio-api.sh` | tokens, descriptor/discovery registration, entitlement, smoke check |
+| `misc/lib/docker-health.sh` | container health and HTTP route readiness waits |
+
+The bundled application metadata lives in
+`descriptors/app-platform-minimal/{descriptor,discovery}.json`. Extending the
+local runtime with more modules is a code change to the descriptor and matching
+Compose module/sidecar services, not a `./start.sh` runtime option.
+
+## Native Docker access
+
+`./start.sh` and `./stop.sh` are the supported runtime lifecycle. Operators who
+need low-level Docker access can work directly from `docker/` with native
+`docker compose` commands and their own environment configuration.
+
+## Stop and reset
+
+```bash
+./stop.sh         # prompts: remove containers (default yes), clear volumes (default no)
+./stop.sh --yes   # non-interactive: remove containers, keep volumes
 ```
 
-#### Python
+## Keycloak topology
 
-```shell
-> python --version
-Python 3.10.12
+Keycloak runs as a **single node** by default. To scale the cluster, uncomment the
+`keycloak-sN` services in `docker/docker-compose.keycloak.yml` and the matching
+`server keycloak-sN` upstreams in `docker/nginx/keycloak-nginx.conf`, then rerun.
+No script changes are needed — health waiting is dynamic and adapts to however many
+nodes are running.
+
+## Configuration model
+
+- `docker/.env` — committed defaults
+- `docker/.env.local` — local non-secret overrides (image tags, generated versions)
+- `docker/.env.local.credentials` — local secrets and Vault token state
+
+Service-level environment variables are defined inline in the Compose files.
+
+## Validation
+
+```bash
+bash misc/tests/run.sh                 # offline: shell syntax + python unit tests
+# `./start.sh --yes` validates the full runtime model and runs its smoke check.
+# A raw `docker compose` invocation needs descriptor-derived MOD_*_IMAGE values
+# supplied by the operator.
+./start.sh --yes
 ```
+
+## Agent skill
+
+The source of the `local-eureka-env` agent Skill lives in
+[`skills/local-eureka-env/`](skills/local-eureka-env/SKILL.md). It teaches coding
+agents to operate this environment from any FOLIO repository: run Karate or
+integration tests against it, deploy locally built module images, attach
+debuggers, and reproduce or verify issues.
+
+Install it from the repository root:
+
+```bash
+npx skills add .                                  # interactive: select local-eureka-env
+npx skills add . --skill local-eureka-env --global --agent claude-code --agent opencode
+```
+
+## Documentation
+
+- Architecture overview: `docs/architecture/README.md`
+- Supported workflows: `docs/architecture/supported-workflows.md`
+- Roadmap: `docs/roadmap/README.md`

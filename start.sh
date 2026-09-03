@@ -1,384 +1,207 @@
 #!/usr/bin/env bash
+#
+# eureka-platform-bootstrap — bootstrap entrypoint.
+#
+# Brings up the bundled local FOLIO Eureka app-platform-minimal environment:
+# prepares config, starts core + manager + application services,
+# registers the descriptor, creates tenant `diku` and a default `folio/folio`
+# admin user, then runs a short smoke check.
+#
+# This script is intentionally thin: it parses arguments, asks a couple of
+# questions, checks tools, and runs the bootstrap flow. The actual logic lives in
+# focused libraries:
+#   misc/lib/folio-common.sh   logging, config loading, output helpers
+#   misc/lib/folio-api.sh      tokens, registration, entitlement, smoke check
+#   misc/lib/docker-health.sh  container / route readiness waits
+#   misc/bootstrap-engine.sh   phase orchestration (run_bootstrap_flow)
+#
+# Usage:
+#   ./start.sh [--actualize [--pre-release]] [--native-sidecar]
+#              [--yes] [--debug]
 
-set -o pipefail
-set -e
+set -euo pipefail
 
-# Function to check if a command exists
-command_exists () {
-    command -v "$1" >/dev/null 2>&1
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_ROOT="${SCRIPT_DIR}"
+readonly DOCKER_DIR="${PROJECT_ROOT}/docker"
+readonly DEFAULT_APP_DESCRIPTOR_PATH="${PROJECT_ROOT}/descriptors/app-platform-minimal/descriptor.json"
+
+# Configuration (repo-defined descriptor, then flags/prompts for runtime choices).
+APP_DESCRIPTOR_PATH="${APP_DESCRIPTOR_PATH:-${DEFAULT_APP_DESCRIPTOR_PATH}}"
+APP_DISCOVERY_PATH=""
+SIDECAR_MODE="${SIDECAR_MODE:-jvm}"
+BUILD_ARM_IMAGES="${BUILD_ARM_IMAGES:-false}"
+ACTUALIZE_MODULES="${ACTUALIZE_MODULES:-false}"
+PRE_RELEASE_MODE="${PRE_RELEASE_MODE:-false}"
+export DEBUG="${DEBUG:-false}"
+ASSUME_YES="${ASSUME_YES:-false}"
+
+# shellcheck source=/dev/null
+source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+# shellcheck source=/dev/null
+source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
+
+usage() {
+  ui_note "$(cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --actualize        Refresh module versions from the FOLIO registry first
+  --pre-release      With --actualize, select latest SNAPSHOT versions
+  --native-sidecar   Use the native folio-module-sidecar image; the pipeline builds
+                     it (GraalVM native binary in a lightweight image) if it is missing
+  --rebuild-native-sidecar
+                     Force a fresh native sidecar build (implies --native-sidecar)
+  --yes, -y          Assume "yes" for prompts (non-interactive)
+  --debug            Stream all helper output instead of folding it
+  -h, --help         Show this help
+
+Keycloak runs as a single node by default. To scale the cluster, uncomment the
+keycloak-sN services in docker/docker-compose.keycloak.yml and the matching
+upstreams in docker/nginx/keycloak-nginx.conf, then rerun - health waiting is
+dynamic and adapts automatically.
+EOF
+)"
 }
 
-# Check for required tools
-echo "Checking installed tools..."
-
-REQUIRED_COMMANDS=("docker" "python3" "java" "mvn" "jq" "curl")
-
-for cmd in "${REQUIRED_COMMANDS[@]}"; do
-    if ! command_exists "$cmd"; then
-        echo "Error: Command '$cmd' not found. Please install it before proceeding."
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --actualize)      ACTUALIZE_MODULES=true; shift ;;
+      --pre-release)    PRE_RELEASE_MODE=true; shift ;;
+      --native-sidecar) SIDECAR_MODE=native; shift ;;
+      --rebuild-native-sidecar) SIDECAR_MODE=native; REBUILD_NATIVE_SIDECAR=true; shift ;;
+      --yes|-y)         ASSUME_YES=true; shift ;;
+      --debug)          DEBUG=true; shift ;;
+      -h|--help)        usage; exit 0 ;;
+      *)
+        ui_error "Unknown argument: $1"
+        ui_note ''
+        usage
         exit 1
-    fi
-done
-
-echo "All required tools are installed."
-
-# Check tool versions
-echo "Checking tool versions..."
-
-# Docker
-DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
-echo "Docker version: $DOCKER_VERSION"
-
-# Docker Compose
-DOCKER_COMPOSE_VERSION=$(docker compose version --short)
-echo "Docker Compose version: $DOCKER_COMPOSE_VERSION"
-
-# Python
-PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-echo "Python version: $PYTHON_VERSION"
-
-# Java
-JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-echo "Java version: $JAVA_VERSION"
-
-# Maven
-MAVEN_VERSION=$(mvn -version | head -n 1 | awk '{print $3}')
-echo "Maven version: $MAVEN_VERSION"
-
-# Check minimum versions
-REQUIRED_PYTHON="3.10"
-REQUIRED_JAVA="17"
-
-# Function to compare versions
-version_ge() {
-    # Returns 0 if $1 >= $2
-    # Returns 1 otherwise
-    [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
-}
-
-if ! version_ge "$PYTHON_VERSION" "$REQUIRED_PYTHON"; then
-    echo "Error: Python version $REQUIRED_PYTHON or higher is required."
-    exit 1
-fi
-
-if [[ "${JAVA_VERSION%%.*}" -lt "$REQUIRED_JAVA" ]]; then
-    echo "Error: Java version $REQUIRED_JAVA or higher is required."
-    exit 1
-fi
-
-echo "Tool versions meet the requirements."
-
-# Change to docker directory
-echo "Changing to the docker directory..."
-cd docker || { echo "Error: 'docker' directory not found."; exit 1; }
-
-# Setup environment variables
-echo "Setting up environment variables..."
-
-# Create .env.local.credentials if it doesn't exist
-if [ ! -f .env.local.credentials ]; then
-    echo "Creating .env.local.credentials file with default variables..."
-    cat <<EOL > .env.local.credentials
-POSTGRES_PASSWORD=postgres_admin
-KC_DB_PASSWORD=keycloak_admin
-KONG_DB_PASSWORD=kong_admin
-OKAPI_DB_PASSWORD=okapi_admin
-MGR_APPLICATIONS_DB_PASSWORD=mgr_applications_admin
-MGR_TENANTS_DB_PASSWORD=mgr_tenants_admin
-MGR_TENANT_ENTITLEMENTS_DB_PASSWORD=mgr_tenant_entitlements_admin
-KC_ADMIN_PASSWORD=admin
-KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
-EOL
-else
-    echo ".env.local.credentials file already exists. Skipping creation."
-fi
-
-# Create .env.local if it doesn't exist
-if [ ! -f .env.local ]; then
-    echo "Creating .env.local file with default variables..."
-    cat <<EOL > .env.local
-KC_LOGIN_CLIENT_SUFFIX=-login-app
-KC_SERVICE_CLIENT_ID=m2m-client
-KC_ADMIN_CLIENT_ID=be-admin-client
-MGR_TENANTS_VERSION=latest
-MGR_TENANTS_REPOSITORY=folioci/mgr-tenants
-MGR_APPLICATIONS_VERSION=latest
-MGR_APPLICATIONS_REPOSITORY=folioci/mgr-applications
-MGR_TENANT_ENTITLEMENTS_VERSION=latest
-MGR_TENANT_ENTITLEMENTS_REPOSITORY=folioci/mgr-tenant-entitlements
-FOLIO_MODULE_SIDECAR_VERSION=latest
-FOLIO_MODULE_SIDECAR_REPOSITORY=folioci/folio-module-sidecar
-EOL
-else
-    echo ".env.local file already exists. Skipping creation."
-fi
-
-# Export variables from files
-export $(grep -v '^#' .env.local.credentials | xargs)
-export $(grep -v '^#' .env.local | xargs)
-
-echo "Environment variables are set."
-
-# Update /etc/hosts file
-echo "Updating /etc/hosts file..."
-
-HOST_ENTRIES=("127.0.0.1 keycloak" "127.0.0.1 kafka")
-
-for entry in "${HOST_ENTRIES[@]}"; do
-    if ! grep -q "$entry" /etc/hosts; then
-        echo "Adding '$entry' to /etc/hosts..."
-        echo "$entry" | sudo tee -a /etc/hosts
-    else
-        echo "Entry '$entry' already exists in /etc/hosts. Skipping."
-    fi
-done
-
-echo "/etc/hosts file updated."
-
-# Build additional Docker images
-echo "Building additional Docker images..."
-bash ../misc/build-images.sh
-echo "Additional Docker images built."
-
-# Generate local credentials and configuration
-echo "Generating local credentials and configuration..."
-bash ./set-default-local-credentials.sh
-echo "Local credentials and configuration generated."
-
-# Update module version in application descriptor
-read -p "Actualize module versions in application descriptor? (y/n): " ans
-  if [[ "$ans" =~ ^[Yy]$ ]]; then
-    python3 ../misc/module-version-actualizer.py
-  fi
-
-# Update module versions
-echo "Updating module versions..."
-python3 ../misc/docker-module-updater/run.py
-echo "Module versions updated."
-
-# Check architecture
-arch=$(uname -m)
-if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
-  read -p "ARM detected. Build ARM-compatible Docker images locally? (y/n): " ans
-  if [[ "$ans" =~ ^[Yy]$ ]]; then
-    cd ..
-    bash misc/images-builder/build.sh
-    cd docker
-  else
-    echo "Skipping building ARM-compatible Docker images."
-  fi
-fi
-
-wait_for_healthy() {
-  echo "⏳ Waiting for all containers with healthcheck to become healthy..."
-
-  spin='-\|/'
-  i=0
-
-  while true; do
-    unhealthy=$(docker ps -q | xargs -r docker inspect --format '{{.State.Health.Status}}' 2>/dev/null | grep -Ev 'healthy$|<no value>' || true)
-
-    if [ -z "$unhealthy" ]; then
-      printf "\r✅ All containers with healthcheck are healthy          \n"
-      break
-    fi
-
-    spin_char="${spin:i++%${#spin}:1}"
-    printf "\r[%c] Waiting for containers to become healthy..." "$spin_char"
-
-    sleep 1
+        ;;
+    esac
   done
 
-  echo -n "⏳ Waiting for routes and DNS to be ready "
-  countdown=10
-  j=0
-  while [ $countdown -gt 0 ]; do
-    spin_char="${spin:j++%${#spin}:1}"
-    printf "\r[%c] Waiting for routes and DNS to be ready... [%d]" "$spin_char" "$countdown"
-    sleep 1
-    countdown=$((countdown - 1))
-  done
-
-  echo -e "\r✅ Routes and DNS should be ready now                \n"
+  if [[ "${PRE_RELEASE_MODE}" == true && "${ACTUALIZE_MODULES}" != true ]]; then
+    ui_error '--pre-release requires --actualize.'
+    exit 1
+  fi
 }
 
-# Deploy core services
-echo "Deploying core services..."
-./start-docker-containers.sh -p core
+# On ARM hosts (Apple Silicon), the published folioci/* images are amd64-only and
+# would run under emulation — turning ~8s startups into ~800s and hanging the
+# environment. So we always build native arm64 images here instead of emulating.
+# The build itself is idempotent (already-native images are skipped), so forcing
+# this on is cheap on warm re-runs.
+select_architecture_build() {
+  local arch
+  arch="$(uname -m)"
+  if [[ "${arch}" == arm64 || "${arch}" == aarch64 ]]; then
+    BUILD_ARM_IMAGES=true
+  fi
+}
 
-wait_for_healthy
+# Ask the few questions master-style: only when interactive and not preset.
+run_prompts() {
+  if [[ "${ASSUME_YES}" == true || ! -t 0 ]]; then
+    return 0
+  fi
 
-# Deploy mgr-components
-echo "Deploying mgr-components..."
+  if [[ "${ACTUALIZE_MODULES}" != true ]]; then
+    if ui_prompt "Actualize module versions from the FOLIO registry?" n; then
+      ACTUALIZE_MODULES=true
+      ui_prompt "Use latest SNAPSHOT (pre-release) versions?" n && PRE_RELEASE_MODE=true
+    fi
+  fi
 
-# Populate Vault token
-sh ./misc/populate-vault-token.sh
+  # Only ask if native wasn't already requested via --native-sidecar /
+  # --rebuild-native-sidecar. JVM stays the default; native is built in-pipeline if
+  # the image is missing (a one-time 5-10 min GraalVM build).
+  if [[ "${SIDECAR_MODE}" != native ]]; then
+    ui_prompt "Use the native folio-module-sidecar image (built if missing, GraalVM)?" n \
+      && SIDECAR_MODE=native
+  fi
 
-./start-docker-containers.sh -p mgr-components
+  # Always succeed: the trailing `ui_prompt && ...` above returns non-zero when the
+  # user declines, which under `set -e` would abort the whole run.
+  return 0
+}
 
-wait_for_healthy
+check_tools() {
+  local cmd python_version java_version compose_version compose_major compose_minor
+  local required=(docker python3 java mvn jq curl)
 
-echo "mgr-components deployed."
+  ui_step 'Checking required tools'
+  for cmd in "${required[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      ui_error "Command \"${cmd}\" not found. Please install it before proceeding."
+      exit 1
+    fi
+  done
 
-echo "Obtaining system access token..."
-
-export KC_ADMIN_CLIENT_ID=be-admin-client
-export KC_ADMIN_CLIENT_SECRET=be-admin-client-secret
-
-systemAccessToken=$(curl -X POST --silent --fail \
-    --header "Content-Type: application/x-www-form-urlencoded" \
-    --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
-    --data-urlencode "grant_type=client_credentials" \
-    --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
-    "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
-
-if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
-    echo "Error: Failed to obtain system access token."
+  compose_version="$(docker compose version --short 2>/dev/null || true)"
+  compose_version="${compose_version#v}"
+  if [[ ! "${compose_version}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    ui_error 'Docker Compose 2.24+ is required (the "docker compose" subcommand).'
     exit 1
-fi
-
-echo "System access token obtained."
-
-# Register application descriptor
-echo "Registering application descriptor for app-platform-minimal..."
-
-response=$(curl -sS -w "\n%{http_code}" -X POST \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data "@../descriptors/app-platform-minimal/descriptor.json" \
-  "http://localhost:8000/applications")
-
-body=$(echo "$response" | sed '$d')
-code=$(echo "$response" | tail -n1)
-
-if [ "$code" -eq 409 ]; then
-  echo "$body" | jq
-  echo "Skipping this error."
-elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-  echo "$body" | jq
-else
-  echo "Request failed with HTTP code $code:"
-  echo "$body" | jq
-  exit 1
-fi
-
-# Register discovery information
-echo "Registering discovery information for app-platform-minimal..."
-
-response=$(curl -s -w "\n%{http_code}" -X POST \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data "@../descriptors/app-platform-minimal/discovery.json" \
-  "http://localhost:8000/modules/discovery")
-
-body=$(echo "$response" | sed '$d')
-code=$(echo "$response" | tail -n1)
-
-if [ "$code" -eq 409 ]; then
-  echo "$body" | jq
-  echo "Skipping this error."
-elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-  echo "$body" | jq
-else
-  echo "Request failed with HTTP code $code:"
-  echo "$body" | jq
-  exit 1
-fi
-
-echo "Application descriptor and discovery information registered."
-
-# Deploy app-platform-minimal
-echo "Deploying app-platform-minimal application..."
-./start-docker-containers.sh -p app-platform-minimal
-
-wait_for_healthy
-
-echo ""
-
-echo "app-platform-minimal application deployed."
-
-systemAccessToken=$(curl -X POST -s \
-    --header "Content-Type: application/x-www-form-urlencoded" \
-    --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
-    --data-urlencode "grant_type=client_credentials" \
-    --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
-    "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
-
-if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
-    echo "Error: Failed to obtain system access token."
+  fi
+  IFS=. read -r compose_major compose_minor _ <<< "${compose_version}"
+  if (( compose_major < 2 || (compose_major == 2 && compose_minor < 24) )); then
+    ui_error "Docker Compose 2.24+ is required (found ${compose_version})."
     exit 1
-fi
+  fi
 
-# Create tenant
-echo "Creating tenant 'test'..."
-
-response=$(curl -s -w "\n%{http_code}" -X POST \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data '{"name": "test", "description": "Test Tenant"}' \
-  "http://localhost:8000/tenants")
-
-body=$(echo "$response" | sed '$d')
-code=$(echo "$response" | tail -n1)
-
-if [ "$code" -ge 400 ] && [ "$code" -lt 500 ]; then
-  echo "$body" | jq
-  echo "Skipping this error."
-elif [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-  echo "Tenant 'test' created:"
-  echo "$body" | jq
-else
-  echo "Tenant creation failed with HTTP code $code:"
-  echo "$body" | jq
-  exit 1
-fi
-
-# Get tenant ID
-testTenantId=$(curl -X GET -s \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  "http://localhost:8000/tenants?query=name==test" | jq -r ".tenants[0].id")
-
-if [ -z "$testTenantId" ] || [ "$testTenantId" == "null" ]; then
-    echo "Error: Failed to obtain ID for tenant 'test'."
+  python_version="$(python3 --version 2>&1 | awk '{print $2}')"
+  if [[ "$(printf '%s\n3.10\n' "$python_version" | sort -V | head -n1)" != '3.10' ]]; then
+    ui_error "Python 3.10 or higher is required (found ${python_version})."
     exit 1
-fi
+  fi
 
-echo "Tenant 'test' ID: $testTenantId"
-
-systemAccessToken=$(curl -X POST -s \
-    --header "Content-Type: application/x-www-form-urlencoded" \
-    --data-urlencode "client_id=${KC_ADMIN_CLIENT_ID}" \
-    --data-urlencode "grant_type=client_credentials" \
-    --data-urlencode "client_secret=${KC_ADMIN_CLIENT_SECRET}" \
-    "http://keycloak:8080/realms/master/protocol/openid-connect/token" | jq -r ".access_token")
-
-if [ -z "$systemAccessToken" ] || [ "$systemAccessToken" == "null" ]; then
-    echo "Error: Failed to obtain system access token."
+  java_version="$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')"
+  if [[ "${java_version%%.*}" -lt 17 ]]; then
+    ui_error "Java 17 or higher is required (found ${java_version})."
     exit 1
-fi
+  fi
 
-echo "Enabling (entitling) app-platform-minimal for tenant 'test'..."
+  ui_ok 'Required tools present'
+}
 
-response=$(curl -s -w "\n%{http_code}" -X POST \
-  --header "Content-Type: application/json" \
-  --header "x-okapi-token: ${systemAccessToken}" \
-  --data '{"tenantId": "'"${testTenantId}"'", "applications": [ "'"$(jq -r '.id' ../descriptors/app-platform-minimal/descriptor.json)"'" ] }' \
-  "http://localhost:8000/entitlements?ignoreErrors=true")
+main() {
+  parse_args "$@"
+  select_architecture_build
 
-body=$(echo "$response" | sed '$d')
-code=$(echo "$response" | tail -n1)
+  APP_DESCRIPTOR_PATH="$(resolve_absolute_path "${APP_DESCRIPTOR_PATH}")"
+  APP_DISCOVERY_PATH="$(dirname "${APP_DESCRIPTOR_PATH}")/discovery.json"
 
-if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-  echo "Application enabled for tenant."
-  echo "$body" | jq
-elif [ "$code" -eq 400 ]; then
-  echo "$body" | jq
-  echo "Skipping this error."
-else
-  echo "Failed to enable application (HTTP $code):"
-  echo "$body" | jq
-  exit 1
-fi
+  if [[ ! -r "${APP_DESCRIPTOR_PATH}" ]]; then
+    ui_error "Application descriptor not found or not readable: ${APP_DESCRIPTOR_PATH}"
+    exit 1
+  fi
 
-echo "Deployment completed successfully!"
+  # Identity banner on top, then everything up to the bootstrap proper runs inside a
+  # first "Configure" phase: the interactive decisions render as branches off its
+  # gutter, and the tool/host preflight lines nest under it instead of floating
+  # unattached. run_bootstrap_flow's first phase closes Configure and continues at 02.
+  print_run_banner
+  # Start the run clock as the first phase opens, so the completion box's total spans
+  # every numbered phase (01 Configure included), not just phase 02 onward.
+  ui_timer_start run_total
+  ui_phase 'Configure'
+  run_prompts
+  check_tools
+  # Preflight: warn early about host readiness (Docker memory, busy ports) so a
+  # bad host surfaces a clear cause here, not a confusing failure mid-bootstrap.
+  preflight_host
+  # Preflight: settle the sudo-requiring /etc/hosts aliases up front, before any
+  # long-running step, so an interactive run prompts here (not mid-bootstrap) and
+  # a non-interactive run never blocks on a hidden password prompt.
+  ensure_host_entries
+  # Surface the resolved run choices (sidecar runtime, module actualization) that the
+  # banner can no longer show, since it prints before these prompts settle.
+  print_run_mode
+  load_app_metadata
+  run_bootstrap_flow
+}
+
+main "$@"
