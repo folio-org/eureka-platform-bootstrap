@@ -16,7 +16,9 @@ x-mgmt-env: &mgmt-env
   JAVA_OPTIONS: "-Dokapi.url=${OKAPI_URL} -Djdk.internal.httpclient.disableHostnameVerification=true -Dmanagement.endpoints.web.exposure.include=*  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -XX:MaxRAMPercentage=75.0"
   MT_URL: http://mgr-tenants:8081
   AM_CLIENT_URL: http://mgr-applications:8081
-  KONG_ADMIN_URL: http://api-gateway:8001
+  APIGW_TYPE: ${APIGW_TYPE:-kong}
+  APIGW_URL: ${APIGW_URL}
+  APIGW_API_KEY: ${APISIX_ADMIN_KEY}
   KC_URL: http://keycloak:8080
   KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID}
   KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET}

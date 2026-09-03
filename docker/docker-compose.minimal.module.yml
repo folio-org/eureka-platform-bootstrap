@@ -185,7 +185,7 @@ services:
     environment:
       <<: [ *folio-module-env, *vault-env ]
       JAVA_OPTIONS: >-
-        -Dokapi.url=http://api-gateway:8000
+        -Dokapi.url=${OKAPI_URL}
         -Djdk.internal.httpclient.disableHostnameVerification=true
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
         -XX:MaxRAMPercentage=70.0

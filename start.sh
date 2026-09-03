@@ -17,7 +17,7 @@
 #
 # Usage:
 #   ./start.sh [--actualize [--pre-release]] [--native-sidecar]
-#              [--yes] [--debug]
+#              [--apisix] [--yes] [--debug]
 
 set -euo pipefail
 
@@ -33,6 +33,7 @@ SIDECAR_MODE="${SIDECAR_MODE:-jvm}"
 BUILD_ARM_IMAGES="${BUILD_ARM_IMAGES:-false}"
 ACTUALIZE_MODULES="${ACTUALIZE_MODULES:-false}"
 PRE_RELEASE_MODE="${PRE_RELEASE_MODE:-false}"
+APIGW_TYPE="${APIGW_TYPE:-kong}"
 export DEBUG="${DEBUG:-false}"
 ASSUME_YES="${ASSUME_YES:-false}"
 
@@ -52,6 +53,8 @@ Options:
                      it (GraalVM native binary in a lightweight image) if it is missing
   --rebuild-native-sidecar
                      Force a fresh native sidecar build (implies --native-sidecar)
+  --apisix           Use Apache APISIX as the API gateway instead of Kong
+                     (equivalent to APIGW_TYPE=apisix)
   --yes, -y          Assume "yes" for prompts (non-interactive)
   --debug            Stream all helper output instead of folding it
   -h, --help         Show this help
@@ -71,6 +74,7 @@ parse_args() {
       --pre-release)    PRE_RELEASE_MODE=true; shift ;;
       --native-sidecar) SIDECAR_MODE=native; shift ;;
       --rebuild-native-sidecar) SIDECAR_MODE=native; REBUILD_NATIVE_SIDECAR=true; shift ;;
+      --apisix)         APIGW_TYPE=apisix; shift ;;
       --yes|-y)         ASSUME_YES=true; shift ;;
       --debug)          DEBUG=true; shift ;;
       -h|--help)        usage; exit 0 ;;
@@ -121,6 +125,13 @@ run_prompts() {
   if [[ "${SIDECAR_MODE}" != native ]]; then
     ui_prompt "Use the native folio-module-sidecar image (built if missing, GraalVM)?" n \
       && SIDECAR_MODE=native
+  fi
+
+  # Only ask if not already set via --apisix or APIGW_TYPE env var. Kong is the
+  # default; APISIX is the emerging replacement (see DR-000045).
+  if [[ "${APIGW_TYPE}" != apisix ]]; then
+    ui_prompt "Use Apache APISIX instead of Kong as API gateway?" n \
+      && APIGW_TYPE=apisix
   fi
 
   # Always succeed: the trailing `ui_prompt && ...` above returns non-zero when the
@@ -189,6 +200,7 @@ main() {
   ui_timer_start run_total
   ui_phase 'Configure'
   run_prompts
+  export APIGW_TYPE
   check_tools
   # Preflight: warn early about host readiness (Docker memory, busy ports) so a
   # bad host surfaces a clear cause here, not a confusing failure mid-bootstrap.

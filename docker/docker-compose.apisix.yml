@@ -1,0 +1,80 @@
+#####################################################
+####---- APISIX API Gateway (APIGW_TYPE=apisix) ----####
+#####################################################
+#
+# Included via COMPOSE_FILE when APIGW_TYPE=apisix.
+# APISIX requires etcd for its configuration store; both services use
+# profile gw-apisix so they start and stop together.
+#
+# The api-gateway service uses the same container name as the Kong alternative
+# in docker-compose.kong.yml — only one gateway file is included at a time
+# (selected by select_gateway_config() in misc/bootstrap-engine.sh), so there
+# is no runtime conflict.
+#
+# External port mapping keeps parity with Kong where possible:
+#   8000 → 9080  proxy HTTP  (same external port as Kong)
+#   9443 → 9443  proxy HTTPS
+#   9180 → 9180  Admin API   (Kong uses 8001; APISIX admin stays on its native port)
+#   9091 → 9091  Prometheus metrics
+#   9092 → 9092  Control API
+
+services:
+  etcd:
+    container_name: etcd
+    image: quay.io/coreos/etcd:v3.5.21
+    networks: [ fpm-net ]
+    profiles:
+      - gw-apisix
+    environment:
+      ETCD_NAME: node1
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd:2380
+      ETCD_INITIAL_CLUSTER: node1=http://etcd:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster
+      ETCDCTL_API: "3"
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: [ "CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  api-gateway:
+    container_name: api-gateway
+    image: ${FOLIO_APISIX_IMAGE}
+    restart: on-failure
+    networks: [ fpm-net ]
+    profiles:
+      - gw-apisix
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY}
+      APISIX_NODE_LISTEN: 9080
+      APISIX_ADMIN_API_PORT: 9180
+      CORS_ALLOW_CREDENTIAL: "true"
+      CORS_ALLOW_ORIGINS_EXACT: "**"
+      CORS_ALLOW_HEADERS: "**"
+    depends_on:
+      etcd:
+        condition: service_healthy
+    ports:
+      - "8000:9080"
+      - "9443:9443"
+      - "9180:9180"
+      - "9091:9091"
+      # Port 9092 (APISIX control API) is intentionally not published to the host:
+      # Kafka already binds host port 9092. The control API is internal-only.
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS -H \"X-API-KEY: ${APISIX_ADMIN_KEY}\" http://127.0.0.1:9180/apisix/admin/routes >/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+volumes:
+  etcd-data: { }

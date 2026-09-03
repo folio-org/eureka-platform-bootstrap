@@ -31,6 +31,8 @@ REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES:-false}"
 ACTUALIZE_MODULES="${ACTUALIZE_MODULES:-false}"
 PRE_RELEASE_MODE="${PRE_RELEASE_MODE:-false}"
 BUILD_ARM_IMAGES="${BUILD_ARM_IMAGES:-false}"
+APIGW_TYPE="${APIGW_TYPE:-kong}"
+GATEWAY_PROFILE="gw-${APIGW_TYPE}"
 
 APP_NAME="${APP_NAME:-}"
 APP_ID="${APP_ID:-}"
@@ -40,6 +42,31 @@ INITIAL_IMAGE_ENV_NAMES="${INITIAL_IMAGE_ENV_NAMES:-}"
 ################################################################################
 # Local setup helpers
 ################################################################################
+
+# Configure COMPOSE_FILE and GATEWAY_PROFILE based on APIGW_TYPE.
+# Must be called before the first `docker compose` invocation so that all
+# subsequent compose commands automatically include the right gateway file.
+select_gateway_config() {
+  APIGW_TYPE="${APIGW_TYPE:-kong}"
+  GATEWAY_PROFILE="gw-${APIGW_TYPE}"
+
+  # COMPOSE_FILE is respected by every docker compose invocation in this
+  # session. The gateway file is NOT listed in compose.yaml to prevent
+  # conflicts between the two gateway service definitions.
+  export COMPOSE_FILE="${DOCKER_DIR}/compose.yaml:${DOCKER_DIR}/docker-compose.${APIGW_TYPE}.yml"
+
+  # Export APIGW_URL so docker compose interpolates it into x-mgmt-env.
+  # APIGW_API_KEY is wired directly to APISIX_ADMIN_KEY in docker-compose.mgmt.yml.
+  if [[ "${APIGW_TYPE}" == "apisix" ]]; then
+    export APIGW_URL=http://api-gateway:9180
+    export OKAPI_URL=http://api-gateway:9080
+  else
+    export APIGW_URL=http://api-gateway:8001
+    export OKAPI_URL=http://api-gateway:8000
+  fi
+
+  ui_debug "API gateway: ${APIGW_TYPE} (profile ${GATEWAY_PROFILE}, url ${APIGW_URL})"
+}
 
 build_arm_images() {
   (
@@ -350,7 +377,11 @@ print_image_plan() {
   print_image_plan_row 'mgr-tenants' "${MGR_TENANTS_IMAGE:-}" "$(image_source_for_var MGR_TENANTS_IMAGE default)"
   print_image_plan_row 'mgr-tenant-entitlements' "${MGR_TENANT_ENTITLEMENTS_IMAGE:-}" "$(image_source_for_var MGR_TENANT_ENTITLEMENTS_IMAGE default)"
   print_image_plan_row 'folio-keycloak' "${FOLIO_KEYCLOAK_IMAGE:-}" "$(image_source_for_var FOLIO_KEYCLOAK_IMAGE default)"
-  print_image_plan_row 'folio-kong' "${FOLIO_KONG_IMAGE:-}" "$(image_source_for_var FOLIO_KONG_IMAGE default)"
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    print_image_plan_row 'folio-apisix' "${FOLIO_APISIX_IMAGE:-}" "$(image_source_for_var FOLIO_APISIX_IMAGE default)"
+  else
+    print_image_plan_row 'folio-kong' "${FOLIO_KONG_IMAGE:-}" "$(image_source_for_var FOLIO_KONG_IMAGE default)"
+  fi
   source="$(image_source_for_var FOLIO_MODULE_SIDECAR_IMAGE default)"
   if [[ "${SIDECAR_MODE}" == "native" && "${source}" == "default" ]]; then
     source='native sidecar'
@@ -570,7 +601,7 @@ check_host_ports() {
     fi
   done
   [[ "${#busy[@]}" -eq 0 ]] && return 0
-  ui_warn "Host port(s) already in use by a non-Docker process: ${busy[*]} (folio-kong needs 8000, Keycloak 8080)."
+  ui_warn "Host port(s) already in use by a non-Docker process: ${busy[*]} (api-gateway needs 8000, Keycloak 8080)."
   ui_warn 'Free them or stop the conflicting service, then rerun.'
 }
 
@@ -634,7 +665,7 @@ print_run_mode() {
   local sep modules
   sep="$(ui_glyph bullet)"
   [[ "${ACTUALIZE_MODULES}" == 'true' ]] && modules='actualized' || modules='pinned'
-  ui_info "$(ui_c dim "${sep}") sidecar ${SIDECAR_MODE} $(ui_c dim "${sep}") modules ${modules}"
+  ui_info "$(ui_c dim "${sep}") sidecar ${SIDECAR_MODE} $(ui_c dim "${sep}") modules ${modules} $(ui_c dim "${sep}") gateway ${APIGW_TYPE:-kong}"
 }
 
 print_final_summary() {
@@ -747,6 +778,10 @@ run_bootstrap_flow() {
   # Recovery is a plain re-run of ./start.sh — every step is idempotent.
   trap 'rc=$?; [[ $rc -ne 0 ]] && dump_failure_diagnostics || true; exit $rc' EXIT
 
+  # Set COMPOSE_FILE, GATEWAY_PROFILE, APIGW_URL, and APIGW_API_KEY based on
+  # APIGW_TYPE before the first docker compose call.
+  select_gateway_config
+
   # run_total is started in start.sh's main() as phase 01 (Configure) opens, so the
   # completion box's total spans every numbered phase; here we continue into the next.
   ui_phase 'Prepare config'
@@ -782,10 +817,10 @@ run_bootstrap_flow() {
   ui_debug "Resolved application services for ${APP_NAME}: ${APP_SERVICES[*]}"
 
   ui_phase 'Start core services'
-  docker compose --profile core up -d
+  docker compose --profile core --profile "${GATEWAY_PROFILE}" up -d
   wait_for_all_healthy
   recover_api_gateway_if_needed
-  wait_for_http_ready 'http://localhost:8001/status' 'api-gateway admin API'
+  wait_for_gateway_admin_ready
   wait_for_http_ready 'http://localhost:8000/' 'api-gateway proxy' '200 404'
 
   SECRET_STORE_VAULT_TOKEN="$(read_vault_root_token)"
@@ -793,10 +828,10 @@ run_bootstrap_flow() {
 
   ui_phase 'Start manager services'
   ui_run 'refreshing the local Vault token' persist_vault_root_token "${SECRET_STORE_VAULT_TOKEN}"
-  docker compose --profile mgr-components up -d
+  docker compose --profile mgr-components --profile "${GATEWAY_PROFILE}" up -d
   wait_for_all_healthy
   recover_api_gateway_if_needed
-  wait_for_http_ready 'http://localhost:8001/status' 'api-gateway admin API'
+  wait_for_gateway_admin_ready
   wait_for_http_ready 'http://localhost:8000/applications' 'applications route' '200 401 403 404 405'
   wait_for_http_ready 'http://localhost:8000/tenants' 'tenants route' '200 401 403 404 405'
   wait_for_http_ready 'http://localhost:8000/entitlements' 'entitlements route' '200 401 403 404 405'
