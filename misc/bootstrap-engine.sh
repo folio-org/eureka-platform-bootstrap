@@ -611,7 +611,7 @@ preflight_host() {
 }
 
 host_api_gateway_url() {
-  printf '%s\n' "${API_GATEWAY_URL:-${KONG_URL:-${FOLIO_KONG_URL:-http://localhost:8000}}}"
+  printf '%s\n' "${API_GATEWAY_URL:-http://localhost:8000}"
 }
 
 create_default_admin_user() {
@@ -675,7 +675,7 @@ print_final_summary() {
   local final_next_step="${4:-}"
 
   ui_box_top "Bootstrap complete - ${final_status}" "total ${run_total}" done
-  ui_box_kv 'API gateway' 'http://localhost:8000'
+  ui_box_kv 'API gateway' "$(host_api_gateway_url)"
   ui_box_kv 'Keycloak' 'http://localhost:8080'
   ui_box_kv 'Tenant' 'diku'
   ui_box_kv 'User' 'folio / folio'

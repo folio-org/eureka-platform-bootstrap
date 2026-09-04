@@ -32,7 +32,7 @@ HOST_OKAPI_URL="${OKAPI_URL:-}"
 load_folio_config
 
 # create-user.sh runs on the host; docker/.env's OKAPI_URL is container-internal.
-API_GATEWAY_URL="${API_GATEWAY_URL:-${KONG_URL:-${FOLIO_KONG_URL:-${HOST_OKAPI_URL:-http://localhost:8000}}}}"
+API_GATEWAY_URL="${API_GATEWAY_URL:-http://localhost:8000}"
 TENANT="${TENANT:-diku}"
 ADMIN_ROLE_NAME='Admin'
 

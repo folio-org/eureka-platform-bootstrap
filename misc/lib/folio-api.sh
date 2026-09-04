@@ -13,6 +13,8 @@
 [[ -n "${_FOLIO_API_SOURCED:-}" ]] && return 0
 readonly _FOLIO_API_SOURCED=1
 
+GW_URL="${API_GATEWAY_URL:-http://localhost:8000}"
+
 ################################################################################
 # Response helpers
 ################################################################################
@@ -167,7 +169,7 @@ register_application_descriptor() {
       sleep 15
     fi
 
-    api_request POST 'http://localhost:8000/applications' \
+    api_request POST "${GW_URL}/applications" \
       --header 'Content-Type: application/json' \
       --header "x-okapi-token: ${system_access_token}" \
       --data "@${APP_DESCRIPTOR_PATH}"
@@ -209,7 +211,7 @@ register_discovery_information() {
       sleep 15
     fi
 
-    api_request POST 'http://localhost:8000/modules/discovery' \
+    api_request POST "${GW_URL}/modules/discovery" \
       --header 'Content-Type: application/json' \
       --header "x-okapi-token: ${system_access_token}" \
       --data "@${APP_DISCOVERY_PATH}"
@@ -258,7 +260,7 @@ wait_for_capabilities() {
   tenant_access_token="$(obtain_tenant_access_token diku)"
   ui_activity_start 'Waiting for capabilities'
   while [[ $cap_wait -lt $max_cap_wait ]]; do
-    api_request GET 'http://localhost:8000/capabilities?limit=1' \
+    api_request GET "${GW_URL}/capabilities?limit=1" \
       --header 'Content-Type: application/json' \
       --header 'x-okapi-tenant: diku' \
       --header "x-okapi-token: ${tenant_access_token}"
@@ -302,7 +304,7 @@ create_tenant_and_enable_application() {
   local si=0 spin_char
 
   ui_step "Creating tenant 'diku'"
-  api_request POST 'http://localhost:8000/tenants' \
+  api_request POST "${GW_URL}/tenants" \
     --header 'Content-Type: application/json' \
     --header "x-okapi-token: ${system_access_token}" \
     --data '{"name": "diku", "description": "Diku Tenant"}'
@@ -317,7 +319,7 @@ create_tenant_and_enable_application() {
     exit 1
   fi
 
-  api_request GET 'http://localhost:8000/tenants?query=name==diku' \
+  api_request GET "${GW_URL}/tenants?query=name==diku" \
     --header 'Content-Type: application/json' \
     --header "x-okapi-token: ${system_access_token}"
   diku_tenant_id="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '.tenants[0].id')"
@@ -329,7 +331,7 @@ create_tenant_and_enable_application() {
   ui_kv "Tenant 'diku' ID" "$diku_tenant_id"
 
   system_access_token="$(obtain_system_access_token)"
-  api_request GET 'http://localhost:8000/entitlements/diku/applications?limit=500' \
+  api_request GET "${GW_URL}/entitlements/diku/applications?limit=500" \
     --header 'Content-Type: application/json' \
     --header 'x-okapi-tenant: diku' \
     --header "x-okapi-token: ${system_access_token}"
@@ -342,7 +344,7 @@ create_tenant_and_enable_application() {
   fi
 
   ui_step "Enabling (entitling) ${APP_NAME} for tenant 'diku'"
-  api_request POST 'http://localhost:8000/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true' \
+  api_request POST "${GW_URL}/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true" \
     --header 'Content-Type: application/json' \
     --header "x-okapi-token: ${system_access_token}" \
     --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
@@ -360,7 +362,7 @@ create_tenant_and_enable_application() {
         sleep 5
         elapsed=$((elapsed + 5))
 
-        api_request GET "http://localhost:8000/entitlement-flows/${entitlement_flow_id}?includeStages=true" \
+        api_request GET "${GW_URL}/entitlement-flows/${entitlement_flow_id}?includeStages=true" \
           --header 'Content-Type: application/json' \
           --header "x-okapi-token: ${system_access_token}"
 
@@ -408,7 +410,7 @@ smoke_check() {
   local failures=0 system_token tenant_token diku_count cap_body cap_count proxy_status
   local states=() texts=() rights=() idx right_label
 
-  proxy_status="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8000/ 2>/dev/null || true)"
+  proxy_status="$(curl -sS -o /dev/null -w '%{http_code}' ${GW_URL}/ 2>/dev/null || true)"
   if [[ " 200 404 " == *" ${proxy_status} "* ]]; then
     states+=(ok); texts+=('api-gateway proxy reachable'); rights+=("HTTP ${proxy_status}")
   else
@@ -419,7 +421,7 @@ smoke_check() {
   if system_token="$(obtain_system_access_token 2>/dev/null)" && [[ -n "$system_token" ]]; then
     states+=(ok); texts+=('System access token obtained'); rights+=('')
     diku_count="$(curl -s -X GET --header "x-okapi-token: ${system_token}" \
-      'http://localhost:8000/tenants?query=name==diku' | jq -r '.tenants | length' 2>/dev/null || echo 0)"
+      "${GW_URL}/tenants?query=name==diku" | jq -r '.tenants | length' 2>/dev/null || echo 0)"
     if [[ "${diku_count:-0}" -gt 0 ]]; then
       states+=(ok); texts+=("Tenant 'diku' exists"); rights+=('')
     else
@@ -431,7 +433,7 @@ smoke_check() {
 
   if tenant_token="$(obtain_tenant_access_token diku 2>/dev/null)" && [[ -n "$tenant_token" ]]; then
     cap_body="$(curl -s --header 'x-okapi-tenant: diku' --header "x-okapi-token: ${tenant_token}" \
-      'http://localhost:8000/capabilities?limit=1' 2>/dev/null || true)"
+      "${GW_URL}/capabilities?limit=1" 2>/dev/null || true)"
     cap_count="$(extract_total_records_count "$cap_body")"
     if [[ "${cap_count}" -gt 0 ]]; then
       states+=(ok); texts+=('Capabilities reachable'); rights+=("${cap_count}")
