@@ -37,6 +37,7 @@ and bootstrap repository.
 ./start.sh --actualize [--pre-release]       # refresh module versions first (SNAPSHOT with --pre-release)
 ./start.sh --native-sidecar                  # native folio-module-sidecar image (built if missing)
 ./start.sh --rebuild-native-sidecar          # force a fresh native sidecar build
+./start.sh --apisix                          # use APISIX as the API gateway instead of Kong
 ./start.sh --yes                             # non-interactive (assume defaults / yes)
 ./start.sh --debug                           # stream all helper output
 ```
@@ -78,6 +79,24 @@ Keycloak runs as a **single node** by default. To scale the cluster, uncomment t
 `server keycloak-sN` upstreams in `docker/nginx/keycloak-nginx.conf`, then rerun.
 No script changes are needed — health waiting is dynamic and adapts to however many
 nodes are running.
+
+## API gateway
+
+Kong is the default API gateway. Apache APISIX is a fully supported alternative:
+
+```bash
+./start.sh --apisix     # select APISIX for this run
+```
+
+Both gateways expose the proxy on **host port 8000** — existing Postman collections
+and curl commands work unchanged.
+
+The gateway image defaults can be overridden in `docker/.env` or via shell env:
+
+| Variable | Default |
+| --- | --- |
+| `FOLIO_KONG_IMAGE` | `folioci/folio-kong:latest` |
+| `FOLIO_APISIX_IMAGE` | `folioci/folio-apisix:latest` |
 
 ## Configuration model
 
