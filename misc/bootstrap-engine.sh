@@ -55,17 +55,17 @@ select_gateway_config() {
   # conflicts between the two gateway service definitions.
   export COMPOSE_FILE="${DOCKER_DIR}/compose.yaml:${DOCKER_DIR}/docker-compose.${APIGW_TYPE}.yml"
 
-  # Export APIGW_URL so docker compose interpolates it into x-mgmt-env.
-  # APIGW_API_KEY is wired directly to APISIX_ADMIN_KEY in docker-compose.mgmt.yml.
+  # APIGW_TYPE and APIGW_URL are provided as literal values by the gateway compose
+  # file (docker-compose.kong.yml / docker-compose.apisix.yml) via service merging.
+  # OKAPI_URL must still be exported here because it is embedded inside JAVA_OPTIONS
+  # strings via compose interpolation — the gateway file cannot override a substring.
   if [[ "${APIGW_TYPE}" == "apisix" ]]; then
-    export APIGW_URL=http://api-gateway:9180
     export OKAPI_URL=http://api-gateway:9080
   else
-    export APIGW_URL=http://api-gateway:8001
     export OKAPI_URL=http://api-gateway:8000
   fi
 
-  ui_debug "API gateway: ${APIGW_TYPE} (profile ${GATEWAY_PROFILE}, url ${APIGW_URL})"
+  ui_debug "API gateway: ${APIGW_TYPE} (profile ${GATEWAY_PROFILE})"
 }
 
 build_arm_images() {

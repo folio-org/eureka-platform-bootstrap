@@ -18,6 +18,11 @@
 #   9091 → 9091  Prometheus metrics
 #   9092 → 9092  Control API
 
+x-gateway-env: &gateway-env
+  APIGW_TYPE: apisix
+  APIGW_URL: http://api-gateway:9180
+  APIGW_API_KEY: ${APISIX_ADMIN_KEY}
+
 services:
   etcd:
     container_name: etcd
@@ -75,6 +80,16 @@ services:
       interval: 10s
       timeout: 10s
       retries: 15
+
+  mgr-applications:
+    environment:
+      <<: *gateway-env
+  mgr-tenants:
+    environment:
+      <<: *gateway-env
+  mgr-tenant-entitlements:
+    environment:
+      <<: *gateway-env
 
 volumes:
   etcd-data: { }

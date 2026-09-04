@@ -200,7 +200,6 @@ main() {
   ui_timer_start run_total
   ui_phase 'Configure'
   run_prompts
-  export APIGW_TYPE
   check_tools
   # Preflight: warn early about host readiness (Docker memory, busy ports) so a
   # bad host surfaces a clear cause here, not a confusing failure mid-bootstrap.

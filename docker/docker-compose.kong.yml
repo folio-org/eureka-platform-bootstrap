@@ -11,6 +11,10 @@
 # so all infrastructure services (db, kafka, vault, keycloak) start first and
 # the gateway joins them in the same up call.
 
+x-gateway-env: &gateway-env
+  APIGW_TYPE: kong
+  APIGW_URL: http://api-gateway:8001
+
 services:
   api-gateway:
     container_name: api-gateway
@@ -58,3 +62,13 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+
+  mgr-applications:
+    environment:
+      <<: *gateway-env
+  mgr-tenants:
+    environment:
+      <<: *gateway-env
+  mgr-tenant-entitlements:
+    environment:
+      <<: *gateway-env
