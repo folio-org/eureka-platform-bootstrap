@@ -82,16 +82,49 @@ nodes are running.
 
 ## API gateway
 
-Kong is the default API gateway. Apache APISIX is a fully supported alternative:
+Kong is the default API gateway. Apache APISIX is a fully supported alternative.
+
+### Selecting a gateway
 
 ```bash
-./start.sh --apisix     # select APISIX for this run
+./start.sh --apisix     # use APISIX for this run
+./start.sh              # use Kong (default)
 ```
 
-Both gateways expose the proxy on **host port 8000** — existing Postman collections
-and curl commands work unchanged.
+Or set the environment variable before running:
 
-The gateway image defaults can be overridden in `docker/.env` or via shell env:
+```bash
+APIGW_TYPE=apisix ./start.sh
+```
+
+### Proxy port
+
+Both gateways expose the proxy on **host port 8000** — existing Postman collections and curl commands work unchanged.
+
+### Setup differences
+
+| Aspect | Kong (default) | APISIX |
+| --- | --- | --- |
+| Proxy port (host) | `8000` | `8000` |
+| Admin API port (host) | `8001` (no auth) | `9180` (requires `X-API-KEY`) |
+| Admin API key | — | `APISIX_ADMIN_KEY` (default in `docker/.env`) |
+| Config store | PostgreSQL (`db` container) | etcd (auto-started as a separate container) |
+| Extra containers | — | `etcd` |
+| Image override variable | `FOLIO_KONG_IMAGE` | `FOLIO_APISIX_IMAGE` |
+
+No extra setup is needed to run APISIX locally — `APISIX_ADMIN_KEY` and the `etcd` container are preconfigured.
+
+### Querying the APISIX Admin API
+
+```bash
+# List routes
+curl http://localhost:9180/apisix/admin/routes \
+  -H "X-API-KEY: edd1c9f034335f136f87ad84b625c8f1"
+```
+
+### Image overrides
+
+Override the gateway image in `docker/.env` or via shell env:
 
 | Variable | Default |
 | --- | --- |
