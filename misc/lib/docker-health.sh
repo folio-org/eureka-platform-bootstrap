@@ -140,7 +140,7 @@ wait_for_http_ready() {
   ui_timer_start http_ready
   ui_activity_start "Verifying ${description}"
   while [[ $elapsed -lt $timeout_seconds ]]; do
-    status_code="$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    status_code="$(curl -sS -o /dev/null -w '%{http_code}' "${@:5}" "$url" 2>/dev/null || true)"
 
     if [[ " $expected_codes " == *" ${status_code} "* ]]; then
       ui_activity_finish ok "${description} responding HTTP ${status_code}" "$(ui_timer_read http_ready)"
@@ -163,33 +163,12 @@ wait_for_http_ready() {
 # For APISIX: checks http://localhost:9180/apisix/admin/routes with X-API-KEY.
 wait_for_gateway_admin_ready() {
   if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
-    local url="http://localhost:9180/apisix/admin/routes"
-    local description="api-gateway admin API"
-    local timeout_seconds="${1:-120}"
-    local elapsed=0 status_code=""
-    local i=0 spin_char
-
-    ui_timer_start http_ready
-    ui_activity_start "Verifying ${description}"
-    while [[ $elapsed -lt $timeout_seconds ]]; do
-      status_code="$(curl -sS -o /dev/null -w '%{http_code}' \
-        -H "X-API-KEY: ${APISIX_ADMIN_KEY:-}" \
-        "$url" 2>/dev/null || true)"
-
-      if [[ "${status_code}" == "200" ]]; then
-        ui_activity_finish ok "${description} responding HTTP ${status_code}" "$(ui_timer_read http_ready)"
-        return 0
-      fi
-
-      spin_char="$(_ui_spin_frame "$((i++))")"
-      ui_activity_tick "${spin_char}" "Verifying ${description}" "HTTP ${status_code:-000}" "$(ui_timer_read http_ready)"
-      sleep 2
-      elapsed=$((elapsed + 2))
-    done
-
-    ui_activity_finish fail "${description} did not become ready" "$(ui_timer_read http_ready 2>/dev/null || printf 0)"
-    ui_error "Timed out waiting for ${description} at ${url} (last HTTP ${status_code:-000})."
-    return 1
+    wait_for_http_ready \
+      'http://localhost:9180/apisix/admin/routes' \
+      'api-gateway admin API' \
+      '200' \
+      "${1:-120}" \
+      -H "X-API-KEY: ${APISIX_ADMIN_KEY:-}"
   else
     wait_for_http_ready 'http://localhost:8001/status' 'api-gateway admin API'
   fi
