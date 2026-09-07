@@ -158,31 +158,11 @@ wait_for_http_ready() {
   return 1
 }
 
-# Wait until the api-gateway admin API is ready.
-# For Kong: checks http://localhost:8001/status (no auth).
-# For APISIX: checks http://localhost:9180/apisix/admin/routes with X-API-KEY.
-wait_for_gateway_admin_ready() {
-  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
-    wait_for_http_ready \
-      'http://localhost:9180/apisix/admin/routes' \
-      'api-gateway admin API' \
-      '200' \
-      "${1:-120}" \
-      -H "X-API-KEY: ${APISIX_ADMIN_KEY:-}"
-  else
-    wait_for_http_ready 'http://localhost:8001/status' 'api-gateway admin API'
-  fi
-}
-
 # Wait until the api-gateway proxy is ready.
-# For Kong: checks http://localhost:8001/status (200).
-# For APISIX: checks http://localhost:9093/v1/healthcheck (200, Control API health endpoint).
+# Both Kong and APISIX expose the proxy on host port 8000; 404 is expected when
+# no routes are registered yet (proxy is alive but has nothing to route to).
 wait_for_gateway_proxy_ready() {
-  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
-    wait_for_http_ready 'http://localhost:9093/v1/healthcheck' 'api-gateway proxy'
-  else
-    wait_for_http_ready 'http://localhost:8001/status' 'api-gateway proxy'
-  fi
+  wait_for_http_ready 'http://localhost:8000/' 'api-gateway proxy' '200 404'
 }
 
 # On a failed bootstrap, print a bounded diagnostic snapshot: compose status plus
