@@ -127,8 +127,7 @@ run_prompts() {
       && SIDECAR_MODE=native
   fi
 
-  # Only ask if not already set via --apisix or APIGW_TYPE env var. Kong is the
-  # default; APISIX is the emerging replacement (see DR-000045).
+  # Only ask if not already set via --apisix or APIGW_TYPE env var.
   if [[ "${APIGW_TYPE}" != apisix ]]; then
     ui_prompt "Use Apache APISIX instead of Kong as API gateway?" n \
       && APIGW_TYPE=apisix
