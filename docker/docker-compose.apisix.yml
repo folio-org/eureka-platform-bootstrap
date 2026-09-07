@@ -13,10 +13,8 @@
 #
 # External port mapping keeps parity with Kong where possible:
 #   8000 → 9080  proxy HTTP  (same external port as Kong)
-#   9443 → 9443  proxy HTTPS
+#   9093 → 9092  Control API (host port 9093; Kafka binds host port 9092)
 #   9180 → 9180  Admin API   (Kong uses 8001; APISIX admin stays on its native port)
-#   9091 → 9091  Prometheus metrics
-#   9092 → 9092  Control API
 
 x-gateway-env: &gateway-env
   APIGW_TYPE: apisix
@@ -70,11 +68,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:9080"
-      - "9443:9443"
+      - "9093:9092"
       - "9180:9180"
-      - "9091:9091"
-      # Port 9092 (APISIX control API) is intentionally not published to the host:
-      # Kafka already binds host port 9092. The control API is internal-only.
     healthcheck:
       test: [ "CMD-SHELL", "curl -fsS -H \"X-API-KEY: ${APISIX_ADMIN_KEY}\" http://127.0.0.1:9180/apisix/admin/routes >/dev/null || exit 1" ]
       interval: 10s

@@ -821,7 +821,7 @@ run_bootstrap_flow() {
   wait_for_all_healthy
   recover_api_gateway_if_needed
   wait_for_gateway_admin_ready
-  wait_for_http_ready 'http://localhost:8000/' 'api-gateway proxy' '200 404'
+  wait_for_gateway_proxy_ready
 
   SECRET_STORE_VAULT_TOKEN="$(read_vault_root_token)"
   export SECRET_STORE_VAULT_TOKEN
