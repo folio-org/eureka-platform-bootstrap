@@ -37,6 +37,7 @@ and bootstrap repository.
 ./start.sh --actualize [--pre-release]       # refresh module versions first (SNAPSHOT with --pre-release)
 ./start.sh --native-sidecar                  # native folio-module-sidecar image (built if missing)
 ./start.sh --rebuild-native-sidecar          # force a fresh native sidecar build
+./start.sh --apisix                          # use APISIX as the API gateway instead of Kong
 ./start.sh --yes                             # non-interactive (assume defaults / yes)
 ./start.sh --debug                           # stream all helper output
 ```
@@ -78,6 +79,57 @@ Keycloak runs as a **single node** by default. To scale the cluster, uncomment t
 `server keycloak-sN` upstreams in `docker/nginx/keycloak-nginx.conf`, then rerun.
 No script changes are needed — health waiting is dynamic and adapts to however many
 nodes are running.
+
+## API gateway
+
+Kong is the default API gateway. Apache APISIX is a fully supported alternative.
+
+### Selecting a gateway
+
+```bash
+./start.sh --apisix     # use APISIX for this run
+./start.sh              # use Kong (default)
+```
+
+Or set the environment variable before running:
+
+```bash
+APIGW_TYPE=apisix ./start.sh
+```
+
+### Proxy port
+
+Both gateways expose the proxy on **host port 8000** — existing Postman collections and curl commands work unchanged.
+
+### Setup differences
+
+| Aspect | Kong (default) | APISIX |
+| --- | --- | --- |
+| Proxy port (host) | `8000` | `8000` |
+| Admin API port (host) | `8001` (no auth) | `9180` (requires `X-API-KEY`) |
+| Admin API key | — | `APISIX_ADMIN_KEY` (default in `docker/.env`) |
+| Config store | PostgreSQL (`db` container) | etcd (auto-started as a separate container) |
+| Extra containers | — | `etcd` |
+| Image override variable | `FOLIO_KONG_IMAGE` | `FOLIO_APISIX_IMAGE` |
+
+No extra setup is needed to run APISIX locally — `APISIX_ADMIN_KEY` and the `etcd` container are preconfigured.
+
+### Querying the APISIX Admin API
+
+```bash
+# List routes
+curl http://localhost:9180/apisix/admin/routes \
+  -H "X-API-KEY: edd1c9f034335f136f87ad84b625c8f1"
+```
+
+### Image overrides
+
+Override the gateway image in `docker/.env` or via shell env:
+
+| Variable | Default |
+| --- | --- |
+| `FOLIO_KONG_IMAGE` | `folioci/folio-kong:latest` |
+| `FOLIO_APISIX_IMAGE` | `folioci/folio-apisix:latest` |
 
 ## Configuration model
 

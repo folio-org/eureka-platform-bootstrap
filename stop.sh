@@ -86,6 +86,12 @@ main() {
 
   load_folio_config
   export_descriptor_module_config "${PROJECT_ROOT}/descriptors/app-platform-minimal/descriptor.json"
+
+  # Include the active gateway Compose file so COMPOSE_PROFILES='*' covers the
+  # gateway service (gw-kong or gw-apisix) when tearing down.
+  APIGW_TYPE="${APIGW_TYPE:-kong}"
+  export COMPOSE_FILE="${DOCKER_DIR}/compose.yaml:${DOCKER_DIR}/docker-compose.${APIGW_TYPE}.yml"
+
   cd "${DOCKER_DIR}"
 
   ui_title "Tearing down the local FOLIO Eureka environment"

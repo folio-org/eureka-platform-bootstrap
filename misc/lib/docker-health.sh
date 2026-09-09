@@ -87,13 +87,22 @@ wait_for_all_healthy() {
   done
 }
 
-# Recover the Kong api-gateway if its admin API is unavailable.
+# Recover the api-gateway if its admin API is unavailable.
+# Behaviour is gateway-type aware: Kong supports in-place migration recovery;
+# APISIX recovery is limited to restarting the container via compose.
 recover_api_gateway_if_needed() {
   local container_state admin_status
 
   container_state="$(docker inspect --format '{{.State.Status}}' api-gateway 2>/dev/null || true)"
   container_state="${container_state%% *}"
-  admin_status="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8001/status 2>/dev/null || true)"
+
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    admin_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+      -H "X-API-KEY: ${APISIX_ADMIN_KEY:-}" \
+      http://localhost:9180/apisix/admin/routes 2>/dev/null || true)"
+  else
+    admin_status="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8001/status 2>/dev/null || true)"
+  fi
 
   if [[ "$container_state" == 'running' && "$admin_status" == '200' ]]; then
     return 0
@@ -107,12 +116,16 @@ recover_api_gateway_if_needed() {
   if [[ -z "$container_state" || "$container_state" != 'running' ]]; then
     (
       cd "${DOCKER_DIR}"
-      docker compose --profile core up -d
+      docker compose --profile core --profile "${GATEWAY_PROFILE:-gw-kong}" up -d
     )
     return 0
   fi
 
-  docker exec api-gateway sh -lc 'rm -f /usr/local/kong/pids/nginx.pid && export KONG_PLUGINS="${KONG_PLUGINS},auth-headers-manager" && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start' >/dev/null
+  # Kong-specific: re-run migrations and restart when the process died but the
+  # container is still running (e.g. nginx PID file left from a prior crash).
+  if [[ "${APIGW_TYPE:-kong}" == "kong" ]]; then
+    docker exec api-gateway sh -lc 'rm -f /usr/local/kong/pids/nginx.pid && export KONG_PLUGINS="${KONG_PLUGINS},auth-headers-manager" && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start' >/dev/null
+  fi
 }
 
 # Wait until an HTTP endpoint answers with one of the expected status codes.
@@ -127,7 +140,7 @@ wait_for_http_ready() {
   ui_timer_start http_ready
   ui_activity_start "Verifying ${description}"
   while [[ $elapsed -lt $timeout_seconds ]]; do
-    status_code="$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    status_code="$(curl -sS -o /dev/null -w '%{http_code}' "${@:5}" "$url" 2>/dev/null || true)"
 
     if [[ " $expected_codes " == *" ${status_code} "* ]]; then
       ui_activity_finish ok "${description} responding HTTP ${status_code}" "$(ui_timer_read http_ready)"
@@ -143,6 +156,13 @@ wait_for_http_ready() {
   ui_activity_finish fail "${description} did not become ready" "$(ui_timer_read http_ready 2>/dev/null || printf 0)"
   ui_error "Timed out waiting for ${description} at ${url} (last HTTP ${status_code:-000})."
   return 1
+}
+
+# Wait until the api-gateway proxy is ready.
+# Both Kong and APISIX expose the proxy on host port 8000; 404 is expected when
+# no routes are registered yet (proxy is alive but has nothing to route to).
+wait_for_gateway_proxy_ready() {
+  wait_for_http_ready 'http://localhost:8000/' 'api-gateway proxy' '200 404'
 }
 
 # On a failed bootstrap, print a bounded diagnostic snapshot: compose status plus
