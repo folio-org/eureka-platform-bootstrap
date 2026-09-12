@@ -139,12 +139,12 @@ case "$*" in
     printf 'cid1\n'
     ;;
   inspect\ --format\ \{\{.Id\}\}*)
-    printf 'cid1 running unhealthy\n'
+    printf 'cid1|running|unhealthy|1|\n'
     ;;
   'inspect --format {{.Name}} cid1')
     printf '/api-gateway\n'
     ;;
-  'logs --tail 6 cid1')
+  'logs --tail 200 cid1')
     printf 'Error: Kong is already running in /usr/local/kong\n'
     ;;
   *)

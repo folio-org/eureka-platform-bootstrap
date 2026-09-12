@@ -581,9 +581,6 @@ check_docker_memory() {
   [[ "${mem_bytes}" =~ ^[1-9][0-9]*$ ]] || return 0
   min_bytes=$(( MIN_DOCKER_MEMORY_GB * 1024 * 1024 * 1024 ))
   (( mem_bytes >= min_bytes )) && return 0
-  # Record the low-memory state so a later failure snapshot can surface the hint
-  # without re-running `docker info`.
-  export DOCKER_MEMORY_LOW=true
   mem_gb=$(( mem_bytes / 1024 / 1024 / 1024 ))
   ui_warn "Docker reports ~${mem_gb}GB memory; ${MIN_DOCKER_MEMORY_GB}GB+ recommended for this stack."
   ui_warn 'Raise it in Docker Desktop -> Settings -> Resources (modules may OOM or thrash otherwise).'

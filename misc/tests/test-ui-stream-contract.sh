@@ -107,12 +107,12 @@ case "$*" in
     printf 'cid1\n'
     ;;
   inspect\ --format\ \{\{.Id\}\}*)
-    printf 'cid1 exited unhealthy\n'
+    printf 'cid1|exited|unhealthy|1|\n'
     ;;
   'inspect --format {{.Name}} cid1')
     printf '/broken-service\n'
     ;;
-  'logs --tail 6 cid1')
+  'logs --tail 200 cid1')
     printf 'log line\n'
     ;;
   *)
@@ -142,6 +142,100 @@ if LC_ALL=C grep -q '[^ -~]' "${stderr_file}"; then
   sed 's/^/stderr: /' "${stderr_file}" >&2
   fail 'failure diagnostics emitted non-ASCII in flat output'
 fi
+if grep -q 'Raise Docker memory' "${stderr_file}"; then
+  fail 'failure diagnostics raised the memory hint without OOM evidence'
+fi
+
+# An ERROR line buried above shutdown noise must surface, and DOCKER_MEMORY_LOW
+# alone (no OOM evidence) must not print the memory hint.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=oom-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\nmgr-applications\tExited (1)'
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=oom-project')
+    printf 'cid1\n'
+    ;;
+  inspect\ --format\ \{\{.Id\}\}*)
+    printf 'cid1|exited||1|\n'
+    ;;
+  'inspect --format {{.Name}} cid1')
+    printf '/mgr-applications\n'
+    ;;
+  'logs --tail 200 cid1')
+    printf 'Starting MgrApplication...\nShutting down ExecutorService\nStopping beans in phase\nERROR Application run failed\njava.net.URIcannot be null\n'
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+: >"${stdout_file}"
+: >"${stderr_file}"
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=oom-project
+  DOCKER_MEMORY_LOW=true
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  dump_failure_diagnostics
+) >"${stdout_file}" 2>"${stderr_file}"
+grep -q 'ERROR Application run failed' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'error line did not surface above shutdown noise'; }
+grep -q 'Starting MgrApplication' "${stderr_file}" \
+  && fail 'unmatched shutdown noise leaked into the snapshot'
+if grep -q 'Raise Docker memory' "${stderr_file}"; then
+  fail 'DOCKER_MEMORY_LOW alone raised the memory hint'
+fi
+
+# OOM evidence (OOMKilled or exit 137) must bring the memory hint back.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=oom-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\nmgr-applications\tExited (137)'
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=oom-project')
+    printf 'cid1\n'
+    ;;
+  inspect\ --format\ \{\{.Id\}\}*)
+    printf 'cid1|exited||137|OOMKilled\n'
+    ;;
+  'inspect --format {{.Name}} cid1')
+    printf '/mgr-applications\n'
+    ;;
+  'logs --tail 200 cid1')
+    printf 'log line\n'
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+: >"${stdout_file}"
+: >"${stderr_file}"
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=oom-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  dump_failure_diagnostics
+) >"${stdout_file}" 2>"${stderr_file}"
+grep -q 'Raise Docker memory' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'OOMKilled evidence did not raise the memory hint'; }
 
 cat >"${stub_bin}/docker" <<'EOF'
 #!/usr/bin/env bash

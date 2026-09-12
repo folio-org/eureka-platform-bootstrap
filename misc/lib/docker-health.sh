@@ -182,8 +182,8 @@ wait_for_gateway_proxy_ready() {
 dump_failure_diagnostics() {
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
   local broken='' cid name line run_total saw_container=false printed_header=false header_line=''
-  local inspect_line inspect_id inspect_state inspect_health
-  local stale_kong=false logs
+  local inspect_line inspect_id inspect_state inspect_health inspect_exit inspect_oom
+  local stale_kong=false oom_evidence=false logs matched_logs
 
   # Close the failing phase as failed and recap before the snapshot box, so the
   # operator sees how far the run got. No-ops when called outside a phase.
@@ -214,16 +214,17 @@ dump_failure_diagnostics() {
 
   while IFS= read -r cid || [[ -n "${cid}" ]]; do
     [[ -n "${cid}" ]] || continue
+    # Pipe-delimited: the health field is optional, so positional space-splitting
+    # would misread the ExitCode/OOMKilled fields appended after it.
     inspect_line="$(docker inspect \
-      --format '{{.Id}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+      --format '{{.Id}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.State.ExitCode}}|{{if .State.OOMKilled}}OOMKilled{{end}}' \
       "${cid}" 2>/dev/null || true)"
-    inspect_id="${inspect_line%% *}"
-    inspect_line="${inspect_line#* }"
-    inspect_state="${inspect_line%% *}"
-    inspect_health="${inspect_line#* }"
-    [[ "${inspect_health}" == "${inspect_state}" ]] && inspect_health=''
+    IFS='|' read -r inspect_id inspect_state inspect_health inspect_exit inspect_oom <<<"${inspect_line}"
     if [[ "${inspect_state}" == "exited" || "${inspect_state}" == "dead" || "${inspect_health}" == "unhealthy" ]]; then
       broken="${broken}${inspect_id}"$'\n'
+      if [[ "${inspect_oom}" == "OOMKilled" || "${inspect_exit}" == "137" ]]; then
+        oom_evidence=true
+      fi
     fi
   done < <(docker ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null || true)
 
@@ -233,9 +234,15 @@ dump_failure_diagnostics() {
       name="$(docker inspect --format '{{.Name}}' "$cid" 2>/dev/null | sed 's#^/##')"
       ui_box_sep
       ui_box_row "${name} - last log lines"
-      logs="$(docker logs --tail 6 "$cid" 2>&1 || true)"
-      if [[ -n "${logs}" ]]; then
-        printf '%s\n' "${logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
+      # A plain short tail usually captures only graceful-shutdown noise; surface
+      # the error lines from a deeper tail, falling back to the plain tail when
+      # nothing matches so the snapshot never goes empty.
+      logs="$(docker logs --tail 200 "$cid" 2>&1 || true)"
+      matched_logs="$(grep -iE 'ERROR|Exception|Caused by|Error:' <<<"${logs}" | head -n 8 || true)"
+      if [[ -n "${matched_logs}" ]]; then
+        printf '%s\n' "${matched_logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
+      elif [[ -n "${logs}" ]]; then
+        tail -n 6 <<<"${logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
       fi
       if grep -qi 'already running in /usr/local/kong' <<<"${logs}"; then
         stale_kong=true
@@ -248,7 +255,10 @@ dump_failure_diagnostics() {
   if [[ "${stale_kong}" == true ]]; then
     _ui_emit "  $(ui_c dim 'api-gateway reports "Kong is already running": recover in-place with rm -f /usr/local/kong/pids/nginx.pid && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start (in the api-gateway container), or rerun ./start.sh after ./stop.sh.')"
   fi
-  [[ "${DOCKER_MEMORY_LOW:-false}" == true ]] \
-    && _ui_emit "  $(ui_c dim 'Raise Docker memory to 12 GB+ in Docker Desktop -> Settings -> Resources, then retry.')"
+  # Only claim a memory problem with OOM evidence; a low-preflight reading does
+  # not make every later failure a memory failure.
+  if [[ "${oom_evidence}" == true ]]; then
+    _ui_emit "  $(ui_c dim 'Raise Docker memory to 12 GB+ in Docker Desktop -> Settings -> Resources, then retry.')"
+  fi
   return 0
 }
