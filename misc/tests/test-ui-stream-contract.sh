@@ -287,28 +287,39 @@ state_file="${HEALTH_STATE_FILE:?}"
 case "$*" in
   ps\ -aq\ --filter\ label=com.docker.compose.project=health-contract\ --filter\ status=exited\ --filter\ status=dead)
     ;;
-  'ps -q')
+  ps\ -q\ --filter\ label=com.docker.compose.project=health-contract)
     state="$(cat "${state_file}" 2>/dev/null || printf '0')"
     state=$((state + 1))
     printf '%s' "${state}" >"${state_file}"
     printf 'cid1\ncid2\n'
+    ;;
+  'ps -q')
+    # Regression detector: the UNFILTERED call sees a foreign project's
+    # unhealthy container. If the health loop ever drops the project filter,
+    # this container enters the unhealthy set and the wait times out.
+    printf 'cid1\ncid2\ncid_foreign\n'
     ;;
   inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
     ;;
   inspect\ --format\ \{\{if\ .State.Health\}\}*)
     state="$(cat "${state_file}" 2>/dev/null || printf '1')"
     cid="${!#}"
-    if [[ "${state}" -eq 1 ]]; then
-      case "${cid}" in
-        cid1) printf '/svc1 healthy\n' ;;
-        cid2) printf '/svc2 starting\n' ;;
-      esac
-    else
-      case "${cid}" in
-        cid1) printf '/svc1 healthy\n' ;;
-        cid2) printf '/svc2 healthy\n' ;;
-      esac
-    fi
+    case "${cid}" in
+      cid_foreign) printf '/foreign-service unhealthy\n' ;;
+      *)
+        if [[ "${state}" -eq 1 ]]; then
+          case "${cid}" in
+            cid1) printf '/svc1 healthy\n' ;;
+            cid2) printf '/svc2 starting\n' ;;
+          esac
+        else
+          case "${cid}" in
+            cid1) printf '/svc1 healthy\n' ;;
+            cid2) printf '/svc2 healthy\n' ;;
+          esac
+        fi
+        ;;
+    esac
     ;;
   *)
     printf 'unexpected docker call: %s\n' "$*" >&2
@@ -361,6 +372,10 @@ if grep -Eq '^[[:space:]]*- Verifying container health$' <<<"${health_clean}"; t
 fi
 grep -Eq 'Container health ready[[:space:]]+[0-9]+ms' <<<"${health_clean}" \
   || fail 'health wait did not report readiness with millisecond timing'
+if grep -q 'foreign-service' "${stderr_file}"; then
+  sed 's/^/stderr: /' "${stderr_file}" >&2
+  fail 'health wait consulted a container outside the compose project'
+fi
 
 : >"${stdout_file}"
 : >"${stderr_file}"

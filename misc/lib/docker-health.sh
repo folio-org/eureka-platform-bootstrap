@@ -24,6 +24,9 @@ wait_for_all_healthy() {
   local timeout_seconds="${HEALTH_WAIT_TIMEOUT_SECONDS:-300}" elapsed=0
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
   local exited_filter=(--filter "label=com.docker.compose.project=${project}" --filter status=exited --filter status=dead)
+  # The health loop must scope to this compose project: an unhealthy container
+  # from an unrelated project on the same daemon must not stall or fail us.
+  local running_filter=(--filter "label=com.docker.compose.project=${project}")
 
   # Baseline of containers already exited before this wait (stale from prior
   # runs) — only crashes that happen during THIS wait should fail it.
@@ -56,7 +59,7 @@ wait_for_all_healthy() {
       [[ -n "${cid}" ]] || continue
       inspect_line="$(docker inspect --format '{{if .State.Health}}{{.Name}} {{.State.Health.Status}}{{end}}' "${cid}" 2>/dev/null || true)"
       [[ -n "${inspect_line}" ]] && health_status="${health_status}${inspect_line}"$'\n'
-    done < <(docker ps -q 2>/dev/null || true)
+    done < <(docker ps -q "${running_filter[@]}" 2>/dev/null || true)
     unhealthy="$(printf '%s\n' "$health_status" | grep -Ev ' healthy$' | grep -v '^[[:space:]]*$' || true)"
     if [[ -n "$health_status" ]]; then
       HEALTH_TOTAL_COUNT="$(printf '%s\n' "$health_status" | grep -c '[^[:space:]]' | tr -d '[:space:]')"

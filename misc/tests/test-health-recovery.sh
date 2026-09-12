@@ -29,7 +29,7 @@ marker="${RECOVERY_MARKER_FILE:?}"
 case "$*" in
   'ps -aq --filter label=com.docker.compose.project=recovery-project --filter status=exited --filter status=dead')
     ;;
-  'ps -q')
+  ps\ -q\ --filter\ label=com.docker.compose.project=recovery-project)
     printf 'cid1\ncid2\n'
     ;;
   inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
