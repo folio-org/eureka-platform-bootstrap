@@ -727,12 +727,22 @@ sync_descriptor_runtime() {
 
   # Force re-export: unset descriptor-derived MOD_*_IMAGE and MOD_*_VERSION so
   # export_descriptor_module_config's "already set" guard does not skip them.
+  # Operator-sourced names (pre-run shell env, .env.local(.credentials)) are
+  # preserved — unsetting them silently discarded documented overrides and made
+  # the skew guard's recovery text untruthful.
   while IFS= read -r line; do
     [[ "${line}" == export\ *=* ]] || continue
     assignment="${line#export }"
     name="${assignment%%=*}"
     case "${name}" in
-      *_IMAGE|MOD_*_VERSION) unset "${name}" ;;
+      *_IMAGE|MOD_*_VERSION)
+        if initial_env_has_name "${name}" \
+          || env_file_has_name "${DOCKER_DIR}/.env.local.credentials" "${name}" \
+          || env_file_has_name "${DOCKER_DIR}/.env.local" "${name}"; then
+          continue
+        fi
+        unset "${name}"
+        ;;
     esac
   done < <(python3 "${PROJECT_ROOT}/misc/docker-module-updater/run.py" --app "${APP_DESCRIPTOR_PATH}" --module-env)
 
