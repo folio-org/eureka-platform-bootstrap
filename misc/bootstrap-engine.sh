@@ -553,12 +553,24 @@ ensure_host_entries() {
 }
 
 # Surface host-readiness problems before any long-running step, so the operator
-# sees a clear cause up front instead of a confusing failure mid-bootstrap. Both
-# checks are warn-only on purpose: on Linux `docker info` MemTotal is host RAM
-# (not an allocatable limit), and a busy port is often just a warm re-run of this
-# same stack — neither should hard-block the supported flow.
+# sees a clear cause up front instead of a confusing failure mid-bootstrap. An
+# unreachable daemon is a hard fail by design: every later check would report
+# false diagnoses (zero MemTotal, our own stack's ports counted as "foreign").
+# The memory and port checks are warn-only on purpose: on Linux `docker info`
+# MemTotal is host RAM (not an allocatable limit), and a busy port is often just
+# a warm re-run of this same stack — neither should hard-block the supported flow.
 MIN_DOCKER_MEMORY_GB="${MIN_DOCKER_MEMORY_GB:-12}"
 HOST_REQUIRED_PORTS="${HOST_REQUIRED_PORTS:-8000 8080}"
+
+# Abort when the Docker daemon itself is unreachable; there is nothing to
+# diagnose past this point.
+check_docker_daemon() {
+  docker info --format '{{.ServerVersion}}' >/dev/null 2>&1 || {
+    ui_error 'Docker daemon is not reachable (is Docker Desktop / dockerd running?)'
+    ui_info '  Start Docker, then rerun ./start.sh.'
+    exit 1
+  }
+}
 
 # Warn when Docker has less memory than the minimal platform realistically needs.
 # A non-numeric/empty reading (old daemon, permission, format change) is skipped
@@ -566,7 +578,7 @@ HOST_REQUIRED_PORTS="${HOST_REQUIRED_PORTS:-8000 8080}"
 check_docker_memory() {
   local mem_bytes min_bytes mem_gb
   mem_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || true)"
-  [[ "${mem_bytes}" =~ ^[0-9]+$ ]] || return 0
+  [[ "${mem_bytes}" =~ ^[1-9][0-9]*$ ]] || return 0
   min_bytes=$(( MIN_DOCKER_MEMORY_GB * 1024 * 1024 * 1024 ))
   (( mem_bytes >= min_bytes )) && return 0
   # Record the low-memory state so a later failure snapshot can surface the hint
@@ -606,6 +618,7 @@ check_host_ports() {
 }
 
 preflight_host() {
+  check_docker_daemon
   check_docker_memory
   check_host_ports
 }
