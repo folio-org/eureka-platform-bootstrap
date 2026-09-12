@@ -53,14 +53,10 @@ API_GATEWAY_URL='http://gateway.example.test:18000' run_create_default_admin_use
 grep -q '^API_GATEWAY_URL=http://gateway.example.test:18000$' "${env_log}" \
   || { cat "${env_log}" >&2; fail "bootstrap overwrote operator API_GATEWAY_URL"; }
 
-FOLIO_KONG_URL='http://folio-kong.example.test:18000' run_create_default_admin_user create_default_admin_user
-grep -q '^API_GATEWAY_URL=http://folio-kong.example.test:18000$' "${env_log}" \
-  || { cat "${env_log}" >&2; fail "bootstrap ignored FOLIO_KONG_URL host gateway"; }
-
-KONG_URL='http://kong.example.test:18000' \
-  FOLIO_KONG_URL='http://folio-kong.example.test:18000' \
+FOLIO_KONG_URL='http://folio-kong.example.test:18000' \
+  KONG_URL='http://kong.example.test:18000' \
   run_create_default_admin_user create_default_admin_user
-grep -q '^API_GATEWAY_URL=http://kong.example.test:18000$' "${env_log}" \
-  || { cat "${env_log}" >&2; fail "bootstrap did not prefer KONG_URL over FOLIO_KONG_URL"; }
+grep -q '^API_GATEWAY_URL=http://localhost:8000$' "${env_log}" \
+  || { cat "${env_log}" >&2; fail "bootstrap must ignore the removed FOLIO_KONG_URL/KONG_URL host gateways"; }
 
 printf 'ok  bootstrap passes a host gateway URL to create-user.sh\n'

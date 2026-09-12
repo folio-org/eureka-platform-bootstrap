@@ -99,18 +99,13 @@ assert_host_gateway_used() {
 run_create_user
 assert_host_gateway_used 'http://localhost:8000'
 
-OKAPI_URL='http://okapi.example.test:18000' run_create_user
-assert_host_gateway_used 'http://okapi.example.test:18000'
-
-FOLIO_KONG_URL='http://folio-kong.example.test:18000' run_create_user
-assert_host_gateway_used 'http://folio-kong.example.test:18000'
-
-KONG_URL='http://kong.example.test:18000' \
+OKAPI_URL='http://okapi.example.test:18000' \
   FOLIO_KONG_URL='http://folio-kong.example.test:18000' \
+  KONG_URL='http://kong.example.test:18000' \
   run_create_user
-assert_host_gateway_used 'http://kong.example.test:18000'
+assert_host_gateway_used 'http://localhost:8000'
 
 API_GATEWAY_URL='http://gateway.example.test:18000' run_create_user
 assert_host_gateway_used 'http://gateway.example.test:18000'
 
-echo "ok  create-user.sh uses a host gateway URL and honors host gateway overrides"
+echo "ok  create-user.sh uses a host gateway URL, ignores removed overrides, and honors API_GATEWAY_URL"

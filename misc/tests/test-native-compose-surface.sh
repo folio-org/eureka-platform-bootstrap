@@ -47,10 +47,17 @@ fi
 
 grep -Fq 'Docker Compose 2.24+ is required' "${PROJECT_ROOT}/start.sh" \
   || fail 'start.sh does not enforce the Compose include minimum version'
-grep -Fq 'docker compose --profile core up -d' "${PROJECT_ROOT}/misc/bootstrap-engine.sh" \
+grep -Fq 'docker compose --profile core --profile "${GATEWAY_PROFILE}" up -d' "${PROJECT_ROOT}/misc/bootstrap-engine.sh" \
   || fail 'bootstrap no longer starts core through native Compose'
 grep -Fq 'docker compose down --remove-orphans' "${PROJECT_ROOT}/stop.sh" \
   || fail 'stop.sh does not tear down through native Compose'
+
+kong_manifest="${DOCKER_DIR}/docker-compose.kong.yml"
+[[ -f "${kong_manifest}" ]] || fail 'docker/docker-compose.kong.yml is missing'
+grep -Fq 'APIGW_URL: http://api-gateway:8001' "${kong_manifest}" \
+  || fail 'kong gateway compose no longer provides APIGW_URL to the mgr services'
+grep -Fq 'KONG_ADMIN_URL: http://api-gateway:8001' "${kong_manifest}" \
+  || fail 'kong gateway compose lost the KONG_ADMIN_URL transition alias for pre-rename mgr images'
 
 if git -C "${PROJECT_ROOT}" grep -n -F \
   -e './dc.sh' \
