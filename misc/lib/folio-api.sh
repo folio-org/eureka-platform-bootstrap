@@ -376,6 +376,12 @@ create_tenant_and_enable_application() {
         elif [[ "$status" == 'failed' || "$status" == 'cancelled' ]]; then
           ui_activity_finish fail 'Entitlement failed' "$(ui_timer_read entitlement_wait 2>/dev/null || printf 0)"
           ui_error 'Entitlement failed:'
+          failed_stages="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '[.stages[]? | select(.status != "finished") | "\(.type // "stage")=\(.status)"] | join(", ")' 2>/dev/null || true)"
+          if [[ -n "${failed_stages}" ]]; then
+            ui_error "Unfinished stages: ${failed_stages}"
+          else
+            ui_error 'Unfinished stages: see raw payload below'
+          fi
           print_api_payload "$API_RESPONSE_BODY" stderr
           exit 1
         fi

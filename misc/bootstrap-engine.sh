@@ -130,10 +130,21 @@ refresh_local_credentials() {
   load_folio_config local
   load_folio_config defaults
 
+  local credentials_existed=false
+  if [[ -f "${DOCKER_DIR}/.env.local.credentials" ]]; then
+    credentials_existed=true
+  fi
+
   (
     cd "${DOCKER_DIR}"
     write_default_local_credentials_file
   )
+
+  # A hand-edited or renamed credentials file being silently reset to defaults
+  # is exactly the kind of thing the operator must see.
+  if [[ "${credentials_existed}" == false ]]; then
+    ui_info 'Created docker/.env.local.credentials (bootstrap-managed defaults)'
+  fi
 }
 
 # The sidecar image (and its tag) is owned entirely by docker/.env(.local) —
@@ -856,7 +867,7 @@ run_bootstrap_flow() {
   ui_debug "Application services: ${APP_SERVICES[*]}"
   docker compose up -d "${APP_SERVICES[@]}"
   wait_for_all_healthy
-  wait_for_http_ready 'http://localhost:8000/capabilities?limit=1' 'capabilities route' '200 401 403 404 405'
+  wait_for_http_ready 'http://localhost:8000/capabilities?limit=1' 'gateway capabilities route alive' '200 401 403 404 405'
   ui_ok "Application services deployed for ${APP_NAME}."
 
   ui_phase 'Finalize tenant setup'

@@ -39,9 +39,14 @@ EOF
   DOCKER_DIR="${tmp}/docker"
   FOLIO_DOCKER_DIR="${DOCKER_DIR}"
   refresh_local_credentials
-)
+  # Second run: the file now exists, so the creation notice must stay silent.
+  refresh_local_credentials
+) >"${tmp}/run-output.log" 2>&1
 
 grep -qx 'export POSTGRES_PASSWORD=local-password' "${tmp}/docker/.env.local.credentials" \
   || { cat "${tmp}/docker/.env.local.credentials" >&2; fail 'local password was not preserved when seeding credentials'; }
 
-echo 'ok  initial credentials preserve docker/.env.local overrides'
+[[ "$(grep -c 'Created docker/.env.local.credentials' "${tmp}/run-output.log")" == '1' ]] \
+  || { cat "${tmp}/run-output.log" >&2; fail 'credentials creation notice not shown exactly once (only when the file was absent)'; }
+
+echo 'ok  initial credentials preserve docker/.env.local overrides and announce first-time creation'

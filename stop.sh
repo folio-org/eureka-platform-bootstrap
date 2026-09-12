@@ -94,6 +94,13 @@ main() {
 
   cd "${DOCKER_DIR}"
 
+  # Honest no-op: with no containers in the project, down would still print
+  # removal messaging. Skip the compose call entirely.
+  if ! COMPOSE_PROFILES='*' docker compose ps -qq 2>/dev/null | grep -q .; then
+    ui_title "Nothing to stop — the environment is not running."
+    return 0
+  fi
+
   ui_title "Tearing down the local FOLIO Eureka environment"
 
   if [[ "${clear_volumes}" == true ]]; then
