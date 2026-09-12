@@ -397,6 +397,9 @@ if [[ "${SIDECAR_MODE:-jvm}" != "native" ]]; then
 fi
 enqueue_effective_image_ref "${FOLIO_KONG_IMAGE:-}" "true"
 enqueue_effective_image_ref "${FOLIO_KEYCLOAK_IMAGE:-}" "true"
+# folioci/folio-apisix is published amd64-only; without an arm64 rebuild the
+# gateway runs under QEMU emulation on Apple Silicon.
+enqueue_effective_image_ref "${FOLIO_APISIX_IMAGE:-}" "true"
 
 if (( NATIVE_SKIP_COUNT > 0 )); then
     ui_info "Skipping ${NATIVE_SKIP_COUNT} image(s) — native arm64 images already present"
