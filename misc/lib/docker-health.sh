@@ -18,7 +18,10 @@ HEALTH_TOTAL_COUNT=0
 wait_for_all_healthy() {
   local i=0 spin_char health_status unhealthy crashed cid inspect_line
   local unhealthy_count=0
-  local timeout_seconds=300 elapsed=0
+  local gateway_recovery_done=false
+  # HEALTH_WAIT_TIMEOUT_SECONDS exists so hermetic tests can exercise the
+  # timeout path in seconds; operators always get the 300s default.
+  local timeout_seconds="${HEALTH_WAIT_TIMEOUT_SECONDS:-300}" elapsed=0
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
   local exited_filter=(--filter "label=com.docker.compose.project=${project}" --filter status=exited --filter status=dead)
 
@@ -76,6 +79,14 @@ wait_for_all_healthy() {
       ui_activity_finish fail 'Container health timed out' "$(ui_timer_read health_wait 2>/dev/null || printf 0)"
       ui_error 'Timed out waiting for containers to become healthy:'
       ui_info "$unhealthy"
+      # The gateway recovery below only helps when the api-gateway is the thing
+      # stuck; give it exactly one bounded retry pass before giving up.
+      if [[ "${unhealthy}" == *'api-gateway'* && "${gateway_recovery_done}" == false ]]; then
+        gateway_recovery_done=true
+        recover_api_gateway_if_needed
+        elapsed=0
+        continue
+      fi
       exit 1
     fi
 
@@ -172,6 +183,7 @@ dump_failure_diagnostics() {
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
   local broken='' cid name line run_total saw_container=false printed_header=false header_line=''
   local inspect_line inspect_id inspect_state inspect_health
+  local stale_kong=false logs
 
   # Close the failing phase as failed and recap before the snapshot box, so the
   # operator sees how far the run got. No-ops when called outside a phase.
@@ -221,13 +233,21 @@ dump_failure_diagnostics() {
       name="$(docker inspect --format '{{.Name}}' "$cid" 2>/dev/null | sed 's#^/##')"
       ui_box_sep
       ui_box_row "${name} - last log lines"
-      docker logs --tail 6 "$cid" 2>&1 \
-        | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done || true
+      logs="$(docker logs --tail 6 "$cid" 2>&1 || true)"
+      if [[ -n "${logs}" ]]; then
+        printf '%s\n' "${logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
+      fi
+      if grep -qi 'already running in /usr/local/kong' <<<"${logs}"; then
+        stale_kong=true
+      fi
     done <<< "$broken"
   fi
   ui_box_bottom
 
   _ui_emit "$(ui_c run "$(ui_glyph arrow)") Re-run ./start.sh - every step is idempotent."
+  if [[ "${stale_kong}" == true ]]; then
+    _ui_emit "  $(ui_c dim 'api-gateway reports "Kong is already running": recover in-place with rm -f /usr/local/kong/pids/nginx.pid && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start (in the api-gateway container), or rerun ./start.sh after ./stop.sh.')"
+  fi
   [[ "${DOCKER_MEMORY_LOW:-false}" == true ]] \
     && _ui_emit "  $(ui_c dim 'Raise Docker memory to 12 GB+ in Docker Desktop -> Settings -> Resources, then retry.')"
   return 0

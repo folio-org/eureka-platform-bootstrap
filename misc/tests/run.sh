@@ -87,6 +87,7 @@ shell_tests=(
   misc/tests/test-build-images-vault-decision.sh
   misc/tests/test-create-user-host-gateway.sh
   misc/tests/test-create-user-idempotent.sh
+  misc/tests/test-health-recovery.sh
   misc/tests/test-native-sidecar-effective-tag.sh
   misc/tests/test-preflight-host.sh
   misc/tests/test-sidecar-resources.sh
