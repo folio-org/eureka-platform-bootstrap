@@ -451,7 +451,7 @@ ui_note()  { _ui_line note "$*"; }
 
 ui_debug() {
   [[ "${DEBUG:-false}" == true ]] || return 0
-  _ui_line debug "$*"
+  _ui_emit "$(_ui_gutter)$(_ui_paint debug "$*")"
 }
 
 ui_kv() {

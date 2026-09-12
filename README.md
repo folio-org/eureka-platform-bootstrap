@@ -21,8 +21,9 @@ and bootstrap repository.
 `./start.sh` is the single entrypoint. It:
 
 - checks required tools
-- asks at most a couple of questions (actualize module versions; on Apple Silicon,
-  build ARM images)
+- asks three questions (actualize module versions; native or JVM sidecar;
+  Kong or APISIX gateway) — ARM image builds happen automatically when needed,
+  they are not a question
 - creates or updates local env files (`docker/.env.local`, `docker/.env.local.credentials`)
 - starts `core`, then `mgr-components`, then the bundled `app-platform-minimal`
   services by name
@@ -138,6 +139,12 @@ Override the gateway image in `docker/.env` or via shell env:
 - `docker/.env.local.credentials` — local secrets and Vault token state
 
 Service-level environment variables are defined inline in the Compose files.
+
+`APIGW_TYPE` and `SIDECAR_MODE` are runtime choices, not config-file settings:
+they are settable only via shell environment, `start.sh` flags (`--apisix`,
+`--native-sidecar`), or the interactive prompts. `start.sh` fixes them before
+it loads any config files, so a value in `docker/.env.local` would be ignored
+at best and misleading at worst — do not put them there.
 
 ## Validation
 

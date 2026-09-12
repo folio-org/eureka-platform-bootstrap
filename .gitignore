@@ -4,6 +4,11 @@ __pycache__/
 misc/__pycache__/
 *.pyc
 
+# Generated build/cache state
+misc/.cache/
+misc/folio-module-sidecar-native-build/
+misc/vault/.build-context.sha256
+
 docker/.env.local*
 **/.temp/
 **/tmp/

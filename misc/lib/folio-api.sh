@@ -195,7 +195,7 @@ register_application_descriptor() {
 
   if [[ "$registration_success" == false ]]; then
     ui_error "Failed to register application descriptor after ${max_retries} attempts."
-    ui_info 'This usually indicates Kong cannot resolve mgr-applications via DNS.'
+    ui_info 'This usually indicates the API gateway cannot resolve mgr-applications via DNS.'
     exit 1
   fi
 }
@@ -237,7 +237,7 @@ register_discovery_information() {
 
   if [[ "$discovery_success" == false ]]; then
     ui_error "Failed to register discovery information after ${max_retries} attempts."
-    ui_info 'This usually indicates Kong cannot resolve mgr-applications via DNS.'
+    ui_info 'This usually indicates the API gateway cannot resolve mgr-applications via DNS.'
     exit 1
   fi
 

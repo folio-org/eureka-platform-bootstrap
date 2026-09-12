@@ -69,6 +69,11 @@ Observed state:
 
 ### GAP-001: Bootstrap can continue after broken local support-image or token setup
 
+Status: **RESOLVED** — the ARM builder propagates per-module failures and
+exits non-zero; Vault token handling is internal to the bootstrap and fails
+fast on an empty token. Covered by `misc/tests/test-build-images-failure.sh`
+and `misc/tests/test-vault-token.sh`.
+
 Priority: `P0`
 
 Problem:
@@ -119,6 +124,10 @@ bash misc/tests/run.sh
 
 ### GAP-002: Config precedence and generated env state are correct but too opaque
 
+Status: **RESOLVED** — precedence is pinned by
+`misc/tests/test-config-precedence.sh`; `run.py` maintains a single managed
+module-metadata block; docs and implementation agree.
+
 Priority: `P1`
 
 Problem:
@@ -167,6 +176,10 @@ bash misc/tests/run.sh
 ```
 
 ### GAP-003: Supported API helpers duplicate curl/token/error handling
+
+Status: **RESOLVED** — `create-user.sh` and the bootstrap share
+`misc/lib/folio-common.sh` / `misc/lib/folio-api.sh` for config, HTTP
+splitting, and token handling (see `misc/tests/test-create-user-*.sh`).
 
 Priority: `P1`
 
@@ -227,6 +240,10 @@ bash misc/create-user.sh folio folio
 
 ### GAP-004: Unsupported diagnostics are too prominent and have risky defaults
 
+Status: **RESOLVED** — the generated-agent diagnostic scripts and
+`TEST_TENANT_README.md` were deleted; only supported helpers remain in
+`misc/`.
+
 Priority: `P1`
 
 Problem:
@@ -286,6 +303,10 @@ bash misc/tests/run.sh
 Expected remaining matches should be intentional historical records only.
 
 ### GAP-005: Compose profile and merge model has stale seams
+
+Status: **RESOLVED** — dead profiles removed; `docker/compose.yaml` uses an
+explicit ordered `include:` list; docs match the runtime model
+(see `misc/tests/test-native-compose-surface.sh`).
 
 Priority: `P1`
 
@@ -404,6 +425,10 @@ Run full UI build only after accepting network/build time.
 
 ### GAP-007: Offline regression net is too narrow for future cleanup
 
+Status: **RESOLVED** — `misc/tests/run.sh` syntax-checks every tracked shell
+script and runs a hermetic suite of shell + python tests covering the
+supported surface.
+
 Priority: `P1`
 
 Problem:
@@ -452,6 +477,8 @@ bash misc/tests/run.sh
 
 ### GAP-008: Bootstrap scaffolds and rewrites `docker/.env.local`, hiding config provenance
 
+Status: **RESOLVED** — see the Resolution below.
+
 Priority: `P1`
 
 Problem:
@@ -492,3 +519,16 @@ Resolution (done):
 5. Refactor supported API helper behavior via GAP-003.
 6. Clean Compose/profile merge semantics via GAP-005.
    (GAP-006 is closed: UI support was removed instead of reworked.)
+
+## 2026-09 audit
+
+A deeper 2026-09-13 audit of `master` @ 44b4245 produced twelve targeted
+remediation tasks, all completed on the `fix/audit-remediation` branch: the
+`KONG_ADMIN_URL` transition alias for warm caches, a green offline suite with
+a gateway env-contract pin, the `is_debug` fix, APISIX in the ARM build queue,
+the Docker-daemon preflight, gateway recovery on health-timeout with stale-PID
+detection, error-line failure snapshots with OOM-conditional memory hints,
+actualizer failure honesty, the shell honesty batch, operator
+`MOD_*_IMAGE`/`MOD_*_VERSION` overrides surviving the runtime sync, and the
+project filter in the health wait. Per-change rationale lives in the commit
+messages; live-proof status is recorded per task.

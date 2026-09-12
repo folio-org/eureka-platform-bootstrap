@@ -133,7 +133,7 @@ Step-level lines render as `<gutter> <colored glyph> <text>`. The gutter is
 that re-source `ui.sh` inherit the
 open-phase state and keep the column continuous through child-driven output. A
 continuous gutter is therefore an emergent property of shared state, never a cursor
-trick — the same discipline as §5. The shims the engine calls:
+trick — the same discipline as §5. The helpers the engine calls:
 
 | Helper      | Renders                          | Use for                          |
 |-------------|----------------------------------|----------------------------------|
@@ -183,7 +183,7 @@ it and continues at 02.
   header's right edge with the boxes below it. The header carries **no** status token — completion is marked
   by the closing line, not by rewriting the header. A per-phase timer `phase_NN`
   starts.
-- A phase **closes** via `phase_done [done|failed]` (`→ ui_phase_finish`), or
+- A phase **closes** via `ui_phase_finish [done|failed]`, or
   automatically when the next `phase` opens. Close is **append-only — never moves
   the cursor** (see §5 for why):
   - **Boxed** (interactive UTF-8): append one closing line — `  └─ <elapsed>` (dim)
@@ -200,7 +200,7 @@ Recipe — add a numbered phase to the flow (in `bootstrap-engine.sh`):
 phase 'Start core services'      # opens 0N, starts timer phase_0N
 docker compose --profile core up -d
 wait_for_all_healthy             # emits step/ok/spinner lines under the header
-# closed automatically by the next phase, or by phase_done before the final box
+# closed automatically by the next phase, or by ui_phase_finish before the final box
 ```
 
 Add the short recap label for any new phase name to `_ui_phase_label` in
@@ -216,7 +216,7 @@ A box opened **while a phase is open** nests one level into the column: every li
 is prefixed with the `  │ ` gutter and `_ui_box_width` subtracts that margin
 (`_ui_box_indent` / `_ui_box_indent_width`), so the panel reads as part of its
 phase. A box drawn with no phase open (the final completion box, printed after
-`phase_done`) has no margin and spans full width.
+`ui_phase_finish`) has no margin and spans full width.
 
 | Helper                                  | Boxed render                          | Flat (pipe) render        |
 |-----------------------------------------|---------------------------------------|---------------------------|
@@ -322,8 +322,9 @@ started — callers must guard (`… 2>/dev/null || printf 0`) rather than inven
 value. The Bash 3.2 fallback store is already handled inside `ui.sh`; use the
 helpers, don't reach into `_UI_TIMER_*`.
 
-Active timers today: `run_total`, `phase_NN`, `health_wait`, `entitlement_wait`,
-`capabilities_wait`.
+Active timers today: `run_total`, `phase_NN`, `health_wait`, `http_ready`,
+`entitlement_wait`, `capabilities_wait`, `build_images`, and per-image
+`job_<module>` timers inside the parallel image builder.
 
 ## 12. Cross-platform notes
 
@@ -386,5 +387,7 @@ ui_trunc ui_trunc_left               truncation
 ui_timer_start ui_timer_read ui_fmt_duration  timing
 ```
 
-Shims in `misc/lib/folio-common.sh` (`title phase phase_done step ok warn`) are
-what the engine calls; new bootstrap code may call `ui_*` directly.
+The bootstrap engine (start.sh, bootstrap-engine.sh, misc/lib/*) calls the
+`ui_*` functions directly; folio-common.sh only re-exports ui.sh into its
+sourcing context. New bootstrap code must call `ui_*` — no wrapper layer
+exists or should be reintroduced.
