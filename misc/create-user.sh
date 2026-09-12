@@ -58,7 +58,7 @@ fail_with() {
   local context="$1" body="$2" detail
   detail="$(extract_api_message "${body}")"
   [[ -n "${detail}" ]] && ui_warn "${detail}"
-  is_debug && print_api_payload "${body}" stderr
+  [[ "${DEBUG:-false}" == true ]] && print_api_payload "${body}" stderr
   error "${context}"
 }
 
