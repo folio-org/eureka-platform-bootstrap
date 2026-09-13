@@ -109,6 +109,7 @@ shell_tests=(
   misc/tests/test-stop-profile-activation.sh
   misc/tests/test-native-compose-surface.sh
   misc/tests/test-sync-descriptor-runtime.sh
+  misc/tests/test-native-sidecar-build-env.sh
 )
 for target in "${shell_tests[@]}"; do
   if bash "${target}"; then

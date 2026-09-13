@@ -76,20 +76,33 @@ else
     CONTAINER_BUILD=false
 fi
 
-# The native profile in pom.xml already contains all necessary workarounds; just
-# run the standard native build. Its huge mvn/Mandrel log is folded under the
-# ui_run spinner (live elapsed instead of "please wait"); on failure only the last
-# 40 lines are shown, with the full log kept on disk (UI_RUN_TAIL_LINES).
+# start.sh exports docker/.env (set -a), so SECRET_STORE_* -- including a real
+# Vault token -- reach this shell and would override the sidecar's EPHEMERAL
+# test store if tests ever run. Nothing in this build needs them. This unset is
+# hygiene, not a full guard: other docker/.env names (KC_SERVICE_CLIENT_ID,
+# KC_LOGIN_CLIENT_SUFFIX, ...) can still override sidecar test config, so the
+# skip flags below are the durable protection.
+for var in $(env | sed -n 's/^\(SECRET_STORE_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    unset "$var"
+done
+
+# Skip all test phases: failsafe honors only -DskipITs (it ignores -DskipTests)
+# and the sidecar pom wires surefire's skip to skipSurefireTests; -DskipTests
+# stays for older refs with standard wiring. These flags are the real guard:
+# host env leaked from docker/.env can override sidecar test config beyond
+# SECRET_STORE_*. The huge mvn/Mandrel log is folded under the ui_run spinner
+# (live elapsed instead of "please wait"); on failure only the last 40 lines are
+# shown, with the full log kept on disk (UI_RUN_TAIL_LINES).
 BUILD_RESULT=0
 if [ "$CONTAINER_BUILD" = true ]; then
     UI_RUN_TAIL_LINES=40 ui_run 'building native sidecar (Mandrel container, ~5-10 min)' \
-        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -q \
+        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -DskipSurefireTests -DskipITs -q \
         -Dquarkus.native.container-build=true \
         -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 \
         || BUILD_RESULT=$?
 else
     UI_RUN_TAIL_LINES=40 ui_run 'building native sidecar (local GraalVM, ~5-10 min)' \
-        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -q \
+        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -DskipSurefireTests -DskipITs -q \
         || BUILD_RESULT=$?
 fi
 
