@@ -241,13 +241,15 @@ dump_failure_diagnostics() {
       # the error lines from a deeper tail, falling back to the plain tail when
       # nothing matches so the snapshot never goes empty.
       logs="$(docker logs --tail 200 "$cid" 2>&1 || true)"
-      matched_logs="$(grep -iE 'ERROR|Exception|Caused by|Error:' <<<"${logs}" | head -n 8 || true)"
+      # -a: a crashed JVM can emit NUL bytes, which would otherwise make grep
+      # report a useless "Binary file (standard input) matches" line.
+      matched_logs="$(grep -aiE 'ERROR|Exception|Caused by|Error:' <<<"${logs}" | head -n 8 || true)"
       if [[ -n "${matched_logs}" ]]; then
         printf '%s\n' "${matched_logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
       elif [[ -n "${logs}" ]]; then
         tail -n 6 <<<"${logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done
       fi
-      if grep -qi 'already running in /usr/local/kong' <<<"${logs}"; then
+      if grep -aqi 'already running in /usr/local/kong' <<<"${logs}"; then
         stale_kong=true
       fi
     done <<< "$broken"

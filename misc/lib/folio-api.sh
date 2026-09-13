@@ -299,7 +299,7 @@ wait_for_capabilities() {
 create_tenant_and_enable_application() {
   local system_access_token="$1"
   local diku_tenant_id entitlement_flow_id status existing_entitlement_count entitlement_finished=false
-  local entitlement_elapsed
+  local entitlement_elapsed failed_stages
   local max_wait=120 elapsed=0
   local si=0 spin_char
 

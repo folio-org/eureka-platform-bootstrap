@@ -94,9 +94,17 @@ main() {
 
   cd "${DOCKER_DIR}"
 
-  # Honest no-op: with no containers in the project, down would still print
-  # removal messaging. Skip the compose call entirely.
-  if ! COMPOSE_PROFILES='*' docker compose ps -qq 2>/dev/null | grep -q .; then
+  # Honest no-op: skip the teardown narration only when the project has no
+  # containers in ANY state (running or exited — `ps` defaults to running
+  # only, and a crashed stack still deserves a real down). The ps status is
+  # captured separately: a daemon failure is an error, never a clean no-op.
+  local ps_output ps_status
+  ps_output="$(COMPOSE_PROFILES='*' docker compose ps -aq 2>/dev/null)" && ps_status=0 || ps_status=$?
+  if [[ ${ps_status} -ne 0 ]]; then
+    ui_error 'docker compose ps failed; cannot determine the environment state (is Docker running?).'
+    return 1
+  fi
+  if [[ -z "${ps_output}" ]]; then
     ui_title "Nothing to stop — the environment is not running."
     return 0
   fi

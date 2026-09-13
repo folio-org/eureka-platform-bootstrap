@@ -122,7 +122,25 @@ resolve_app_services() {
   fi
 }
 
+# The creation notice must be emitted OUTSIDE ui_run: ui_run folds helper
+# output in non-debug mode, so an in-helper ui_info would never reach the
+# operator on a default run.
 refresh_local_credentials() {
+  local credentials_existed=false
+  if [[ -f "${DOCKER_DIR}/.env.local.credentials" ]]; then
+    credentials_existed=true
+  fi
+
+  ui_run 'refreshing local credentials and defaults' refresh_local_credentials_file
+
+  # A hand-edited or renamed credentials file being silently reset to defaults
+  # is exactly the kind of thing the operator must see.
+  if [[ "${credentials_existed}" == false ]]; then
+    ui_info 'Created docker/.env.local.credentials (bootstrap-managed defaults)'
+  fi
+}
+
+refresh_local_credentials_file() {
   # Load in effective-precedence order before writing the generated credentials
   # file. This keeps a first-run docker/.env.local override from being replaced
   # by the fallback embedded in local-credentials.sh.
@@ -130,21 +148,10 @@ refresh_local_credentials() {
   load_folio_config local
   load_folio_config defaults
 
-  local credentials_existed=false
-  if [[ -f "${DOCKER_DIR}/.env.local.credentials" ]]; then
-    credentials_existed=true
-  fi
-
   (
     cd "${DOCKER_DIR}"
     write_default_local_credentials_file
   )
-
-  # A hand-edited or renamed credentials file being silently reset to defaults
-  # is exactly the kind of thing the operator must see.
-  if [[ "${credentials_existed}" == false ]]; then
-    ui_info 'Created docker/.env.local.credentials (bootstrap-managed defaults)'
-  fi
 }
 
 # The sidecar image (and its tag) is owned entirely by docker/.env(.local) —
@@ -165,7 +172,10 @@ capture_initial_image_env_names() {
     esac
   done < <(env)
 
-  INITIAL_IMAGE_ENV_NAMES="$(printf '%s\n' "${names[@]}")"
+  # ${names[@]+...} keeps the expansion safe on bash 3.2, where an empty array
+  # under set -u is an unbound-variable error (operators with no exported
+  # image overrides hit this on a vanilla macOS bash).
+  INITIAL_IMAGE_ENV_NAMES="$(printf '%s\n' ${names[@]+"${names[@]}"})"
 }
 
 initial_env_has_name() {
@@ -779,7 +789,7 @@ check_and_handle_descriptor_image_skew() {
         ui_ok "Descriptor and image versions aligned after actualize."
         return 0
       fi
-      ui_warn "Skew persists for ${count} module(s) after actualize — a standalone override in docker/.env.local likely survived cleanup."
+      ui_warn "Skew persists for ${count} module(s) after actualize — a standalone override in the shell environment or docker/.env.local likely survived cleanup."
     fi
   fi
 
@@ -791,7 +801,7 @@ check_and_handle_descriptor_image_skew() {
   done
   ui_info "  Recovery options:"
   ui_info "    1. Run ./start.sh --actualize [--pre-release] to refresh descriptor versions from the registry."
-  ui_info "    2. Remove or align the matching MOD_*_IMAGE override in docker/.env.local."
+  ui_info "    2. Remove or align the matching MOD_*_IMAGE / MOD_*_VERSION override in the shell environment or docker/.env.local."
   ui_info "  Note: a plain ./start.sh --yes re-run will NOT recover from this — the override persists."
   exit 1
 }
@@ -817,7 +827,7 @@ run_bootstrap_flow() {
   # completion box's total spans every numbered phase; here we continue into the next.
   ui_phase 'Prepare config'
   capture_initial_image_env_names
-  ui_run 'refreshing local credentials and defaults' refresh_local_credentials
+  refresh_local_credentials
   select_sidecar_resources
 
   ui_run 'preparing support images' bash "${PROJECT_ROOT}/misc/build-images.sh"

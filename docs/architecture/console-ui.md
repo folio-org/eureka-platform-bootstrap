@@ -142,6 +142,7 @@ trick — the same discipline as §5. The helpers the engine calls:
 | `ui_fail`   | red `✗` + text                   | a step that failed (non-fatal UX)|
 | `ui_warn`   | yellow `!` + text                | a warning                        |
 | `ui_error`  | bold-red `Error:` + text         | a hard error (usually pre-exit)  |
+| `ui_debug`  | plain text                       | a DEBUG-only diagnostic line (nests in a phase like `ui_info`; prints nothing unless `DEBUG=true`) |
 
 `ui_run <desc> <cmd...>` wraps a helper invocation: folded output uses a live
 activity spinner on interactive color terminals, then commits one final timed
@@ -167,8 +168,8 @@ marker/prefix/box around them.
 
 ## 7. The phase model
 
-A run is a sequence of numbered phases. The engine calls `phase '<Name>'`
-(`→ ui_phase`) once per phase; numbering is automatic and zero-padded
+A run is a sequence of numbered phases. The engine calls `ui_phase '<Name>'`
+once per phase; numbering is automatic and zero-padded
 (`01`, `02`, …).
 
 The run opens with phase **01 Configure**, opened by `start.sh`'s `main` (not the
@@ -197,7 +198,7 @@ it and continues at 02.
 Recipe — add a numbered phase to the flow (in `bootstrap-engine.sh`):
 
 ```sh
-phase 'Start core services'      # opens 0N, starts timer phase_0N
+ui_phase 'Start core services'   # opens 0N, starts timer phase_0N
 docker compose --profile core up -d
 wait_for_all_healthy             # emits step/ok/spinner lines under the header
 # closed automatically by the next phase, or by ui_phase_finish before the final box
@@ -296,7 +297,7 @@ real timer backs it.
 ## 10. Banner and recap
 
 - **Banner**: `print_run_banner` (bootstrap-engine, called from `start.sh` at the top,
-  **above** the Configure phase) renders `● <bold name>` via `title`, then one dim
+  **above** the Configure phase) renders `● <bold name>` via `ui_title`, then one dim
   identity line `app · arch` (version prepended only if `git describe --tags` yields
   one — never hardcode a version). Separators via `ui_glyph bullet`. The sidecar/module
   choices are not shown here — the banner prints before those prompts settle — so
@@ -372,6 +373,7 @@ ui_glyph                             glyph + ASCII fallback table
 _ui_emit / _ui_line / _ui_gutter     stderr line emit + gutter
 ui_title ui_info ui_note ui_kv       plain lines / banner (ui_kv nests in a phase)
 ui_ok ui_fail ui_step ui_warn ui_error  status lines (gutter + glyph)
+ui_debug                             DEBUG-only line (gutter-nested, silent otherwise)
 ui_prompt                            interactive yes/no decision (branch off the flow)
 ui_status_timed                      timed ok/fail status line
 ui_activity_start/tick/finish        wait-loop activity primitive
