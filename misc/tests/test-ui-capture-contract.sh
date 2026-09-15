@@ -102,7 +102,11 @@ assert_stdout_value() {
   }
 }
 
-assert_stdout_value 'resolve_absolute_path' "${PROJECT_ROOT}/start.sh" \
+# resolve_absolute_path resolves symlinks, so the expectation must be resolved
+# the same way (macOS checkouts under /tmp hit /tmp -> /private/tmp).
+expected_start_sh="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' \
+  "${PROJECT_ROOT}/start.sh")"
+assert_stdout_value 'resolve_absolute_path' "${expected_start_sh}" \
   resolve_absolute_path "${PROJECT_ROOT}/start.sh"
 assert_stdout_value 'host_api_gateway_url' 'http://localhost:8000' host_api_gateway_url
 assert_stdout_value 'image_source_for_var fallback' 'descriptor' image_source_for_var MOD_USERS_IMAGE descriptor

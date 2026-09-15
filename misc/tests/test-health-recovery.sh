@@ -30,6 +30,16 @@ case "$*" in
   'ps -aq --filter label=com.docker.compose.project=recovery-project --filter status=exited --filter status=dead')
     ;;
   ps\ -q\ --filter\ label=com.docker.compose.project=recovery-project)
+    if [[ -n "${HEALTH_PS_FAILS_AFTER:-}" ]]; then
+      count_file="${HEALTH_PS_COUNT_FILE:?}"
+      n="$(cat "${count_file}" 2>/dev/null || printf '0')"
+      n=$((n + 1))
+      printf '%s' "${n}" >"${count_file}"
+      if [[ "${n}" -gt "${HEALTH_PS_FAILS_AFTER}" ]]; then
+        printf 'Cannot connect to the Docker daemon\n' >&2
+        exit 1
+      fi
+    fi
     printf 'cid1\ncid2\n'
     ;;
   inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
@@ -52,6 +62,9 @@ case "$*" in
     ;;
   exec\ api-gateway*)
     printf 'exec\n' >>"${marker}"
+    ;;
+  'restart api-gateway')
+    printf 'restart\n' >>"${marker}"
     ;;
   *)
     printf 'unexpected docker call: %s\n' "$*" >&2
@@ -81,6 +94,8 @@ run_health_wait() {
     cd "${PROJECT_ROOT}"
     PATH="${stub_bin}:${PATH}"
     export RECOVERY_MARKER_FILE="${marker_file}" RECOVERY_FIXES STUCK_NAME
+    export APIGW_TYPE="${APIGW_TYPE:-}" HEALTH_PS_FAILS_AFTER="${HEALTH_PS_FAILS_AFTER:-}" \
+      HEALTH_PS_COUNT_FILE="${HEALTH_PS_COUNT_FILE:-/dev/null}"
     export HEALTH_WAIT_TIMEOUT_SECONDS=8
     COMPOSE_PROJECT_NAME=recovery-project
     # shellcheck source=/dev/null
@@ -127,7 +142,37 @@ RECOVERY_FIXES=false STUCK_NAME=other-service run_health_wait
   || fail "recovery was invoked for a non-gateway timeout"
 [[ ! -s "${stdout_file}" ]] || { sed 's/^/stdout: /' "${stdout_file}" >&2; fail 'health wait wrote to stdout'; }
 
-# Case 4: failure diagnostics detect the stale-Kong-PID log line and print the
+# Case 4: APISIX gateway stuck while running -> recovery restarts the container
+# (the kong in-place migrations do not apply) and the wait completes.
+: >"${marker_file}"
+APIGW_TYPE=apisix RECOVERY_FIXES=true STUCK_NAME=api-gateway run_health_wait
+unset APIGW_TYPE
+[[ ${run_status} -eq 0 ]] || { cat "${stderr_file}" >&2; fail "health wait failed although apisix restart helped"; }
+[[ "$(recovery_count)" == '1' ]] \
+  || { cat "${stderr_file}" >&2; fail "expected exactly one apisix restart, got '$(recovery_count)'"; }
+grep -q 'restart' "${marker_file}" \
+  || { cat "${marker_file}" >&2; fail 'apisix recovery did not restart the container'; }
+
+# Case 5: the Docker daemon dies mid-wait -> the wait fails loudly instead of
+# reading an empty container list as "all healthy".
+: >"${marker_file}"
+ps_count_file="$(mktemp)"
+printf '0' >"${ps_count_file}"
+RECOVERY_FIXES=true STUCK_NAME=api-gateway \
+  HEALTH_PS_FAILS_AFTER=1 HEALTH_PS_COUNT_FILE="${ps_count_file}" run_health_wait
+unset HEALTH_PS_FAILS_AFTER
+rm -f "${ps_count_file}"
+[[ ${run_status} -ne 0 ]] || fail "daemon death mid-wait was reported as success"
+grep -q 'Lost contact with the Docker daemon' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'daemon death mid-wait was not reported'; }
+if grep -q 'Container health ready' "${stderr_file}"; then
+  cat "${stderr_file}" >&2
+  fail 'daemon death mid-wait still reported healthy readiness'
+fi
+[[ "$(recovery_count)" == '0' ]] \
+  || fail 'recovery ran although the daemon was gone'
+
+# Case 6: failure diagnostics detect the stale-Kong-PID log line and print the
 # repo's own in-container fix.
 cat >"${stub_bin}/docker" <<'EOF'
 #!/usr/bin/env bash

@@ -17,7 +17,7 @@ HEALTH_TOTAL_COUNT=0
 # healthy. Containers without a health check are ignored.
 wait_for_all_healthy() {
   local i=0 spin_char health_status unhealthy crashed cid inspect_line
-  local unhealthy_count=0
+  local unhealthy_count=0 running_ids
   local gateway_recovery_done=false
   # HEALTH_WAIT_TIMEOUT_SECONDS exists so hermetic tests can exercise the
   # timeout path in seconds; operators always get the 300s default.
@@ -55,11 +55,19 @@ wait_for_all_healthy() {
     fi
 
     health_status=''
+    # An empty list from a reachable daemon means "nothing to wait for"; a
+    # failed call means the daemon went away mid-wait — which must fail
+    # loudly, not read as "all healthy".
+    if ! running_ids="$(docker ps -q "${running_filter[@]}" 2>/dev/null)"; then
+      ui_activity_finish fail 'Container health failed' "$(ui_timer_read health_wait 2>/dev/null || printf 0)"
+      ui_error 'Lost contact with the Docker daemon while waiting for container health.'
+      exit 1
+    fi
     while IFS= read -r cid || [[ -n "${cid}" ]]; do
       [[ -n "${cid}" ]] || continue
       inspect_line="$(docker inspect --format '{{if .State.Health}}{{.Name}} {{.State.Health.Status}}{{end}}' "${cid}" 2>/dev/null || true)"
       [[ -n "${inspect_line}" ]] && health_status="${health_status}${inspect_line}"$'\n'
-    done < <(docker ps -q "${running_filter[@]}" 2>/dev/null || true)
+    done <<< "${running_ids}"
     unhealthy="$(printf '%s\n' "$health_status" | grep -Ev ' healthy$' | grep -v '^[[:space:]]*$' || true)"
     if [[ -n "$health_status" ]]; then
       HEALTH_TOTAL_COUNT="$(printf '%s\n' "$health_status" | grep -c '[^[:space:]]' | tr -d '[:space:]')"
@@ -83,10 +91,13 @@ wait_for_all_healthy() {
       ui_error 'Timed out waiting for containers to become healthy:'
       ui_info "$unhealthy"
       # The gateway recovery below only helps when the api-gateway is the thing
-      # stuck; give it exactly one bounded retry pass before giving up.
+      # stuck; give it exactly one bounded retry pass before giving up. The
+      # notice keeps the second wait window visible in flat/piped output,
+      # where the spinner is silent.
       if [[ "${unhealthy}" == *'api-gateway'* && "${gateway_recovery_done}" == false ]]; then
         gateway_recovery_done=true
         recover_api_gateway_if_needed
+        ui_info 'api-gateway recovery attempted — re-verifying container health'
         elapsed=0
         continue
       fi
@@ -135,9 +146,14 @@ recover_api_gateway_if_needed() {
     return 0
   fi
 
-  # Kong-specific: re-run migrations and restart when the process died but the
+  # Kong: re-run migrations and restart when the process died but the
   # container is still running (e.g. nginx PID file left from a prior crash).
-  if [[ "${APIGW_TYPE:-kong}" == "kong" ]]; then
+  # APISIX has no in-place migration recovery: restart the wedged container
+  # instead of returning without doing anything (which would grant a second
+  # wait window that cannot succeed).
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    docker restart api-gateway >/dev/null
+  else
     docker exec api-gateway sh -lc 'rm -f /usr/local/kong/pids/nginx.pid && export KONG_PLUGINS="${KONG_PLUGINS},auth-headers-manager" && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start' >/dev/null
   fi
 }

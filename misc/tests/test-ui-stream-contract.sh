@@ -22,7 +22,7 @@ assert_value() {
 stdout_file="$(mktemp)"
 stderr_file="$(mktemp)"
 stub_bin="$(mktemp -d)"
-trap 'rm -f "${stdout_file}" "${stderr_file}"; rm -rf "${stub_bin}"' EXIT
+trap 'rm -f "${stdout_file}" "${stderr_file}" "${health_state_file:-}" "${token_count_file:-}"; rm -rf "${stub_bin}"' EXIT
 
 (
   cd "${PROJECT_ROOT}"

@@ -391,5 +391,6 @@ ui_timer_start ui_timer_read ui_fmt_duration  timing
 
 The bootstrap engine (start.sh, bootstrap-engine.sh, misc/lib/*) calls the
 `ui_*` functions directly; folio-common.sh only re-exports ui.sh into its
-sourcing context. New bootstrap code must call `ui_*` — no wrapper layer
-exists or should be reintroduced.
+sourcing context. The one legacy exception is folio-common's `error()`,
+which wraps `ui_error` and exits — new bootstrap code must call `ui_*`
+directly; do not add more wrappers like it.

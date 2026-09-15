@@ -62,7 +62,7 @@ out="$( DOCKER_MEM_BYTES=0 MIN_DOCKER_MEMORY_GB=12 check_docker_memory 2>&1 )"
 [[ -z "${out}" ]] || fail "zero memory reading rendered as a measurement (got '${out}')"
 
 # --- check_host_ports --------------------------------------------------------
-# Case 4: only 8000 open and NOT held by docker -> warns about 8000 alone.
+# Case 5: only 8000 open and NOT held by docker -> warns about 8000 alone.
 # (The static hint text names both ports, so assert on the busy list, not the
 # whole message.)
 out="$({

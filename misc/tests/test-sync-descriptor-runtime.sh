@@ -84,8 +84,10 @@ UI_COLOR=false
 ui_cols() { printf '140\n'; }
 
 # --- Test A: operator override survives the sync and shows up as skew ---------
-MOD_USERS_IMAGE='custom/mod-users:test'
-MOD_USERS_VERSION='19.0.0'
+# Exported, so the pre-run shell-env provenance arm (initial_env_has_name) is
+# the one under test; the tmp .env.local carries the same values as backup.
+export MOD_USERS_IMAGE='custom/mod-users:test'
+export MOD_USERS_VERSION='19.0.0'
 capture_initial_image_env_names
 
 sync_descriptor_runtime >"${stdout_file}" 2>"${stderr_file}"
@@ -112,7 +114,7 @@ unset MOD_USERS_IMAGE MOD_USERS_VERSION
 capture_initial_image_env_names
 # Simulate a value exported by a PREVIOUS bootstrap sync (not operator-sourced,
 # hence invisible to the initial-env capture): the sync must replace it.
-MOD_USERS_IMAGE='folioorg/mod-users:19.5.0'
+export MOD_USERS_IMAGE='folioorg/mod-users:19.5.0'
 
 sync_descriptor_runtime >"${stdout_file}" 2>"${stderr_file}"
 
