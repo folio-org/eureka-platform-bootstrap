@@ -71,7 +71,7 @@ select_gateway_config() {
 build_arm_images() {
   (
     cd "${PROJECT_ROOT}"
-    REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES}" SIDECAR_MODE="${SIDECAR_MODE}" \
+    REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES}" SIDECAR_MODE="${SIDECAR_MODE}" APIGW_TYPE="${APIGW_TYPE}" \
       bash misc/images-builder/build.sh
   )
 }
@@ -720,12 +720,35 @@ print_final_summary() {
 # module config (unset first so the "already set" guard in
 # export_descriptor_module_config does not skip the new values). Called once
 # during Prepare config and again after a skew-driven actualize.
+#
+# The actualizer's result summary ("Modules version updated:" lines /
+# "No updates were made.") goes to stdout, which ui_run folds away on success
+# in non-debug mode — the operator would never see what --actualize changed.
+# Capture the stdout in the helper and replay it after the step commits,
+# outside the fold (same pattern as the credentials creation notice above).
+run_module_version_actualizer() {
+  ACTUALIZER_SUMMARY_FILE="$(mktemp)"
+  python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" \
+    --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}" \
+    >"${ACTUALIZER_SUMMARY_FILE}"
+}
+
+print_actualizer_summary() {
+  local line
+  [[ -s "${ACTUALIZER_SUMMARY_FILE:-}" ]] || return 0
+  while IFS= read -r line; do
+    if [[ -n "${line}" ]]; then ui_info "${line}"; fi
+  done < "${ACTUALIZER_SUMMARY_FILE}"
+  rm -f "${ACTUALIZER_SUMMARY_FILE}"
+  ACTUALIZER_SUMMARY_FILE=''
+}
+
 sync_descriptor_runtime() {
   local line assignment name
 
-  if [[ "${ACTUALIZE_MODULES}" == 'true' ]]; then
-    ui_run 'actualizing module versions' \
-      python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}"
+  if [[ "${ACTUALIZE_MODULES}" == "true" ]]; then
+    ui_run 'actualizing module versions' run_module_version_actualizer
+    print_actualizer_summary
   else
     ui_debug 'Skipping module version actualization.'
   fi

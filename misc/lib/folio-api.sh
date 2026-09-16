@@ -158,6 +158,73 @@ obtain_tenant_access_token() {
 # Registration
 ################################################################################
 
+# Host-side admin endpoints of the two supported gateways. Both ports are
+# published by their compose files; the container-internal APIGW_URL is not
+# reachable from the bootstrap shell.
+KONG_ADMIN_URL="${KONG_ADMIN_URL:-http://localhost:8001}"
+APISIX_ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
+
+# Print the module service names registered in the active gateway's admin API.
+# Both gateways name module services by module id (e.g. mod-users-19.6.0), so
+# the application's discovery ids match either store as-is. Returns non-zero
+# when the admin API does not answer HTTP 200 (nothing is printed then).
+gateway_module_service_names() {
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    api_request GET "${APISIX_ADMIN_URL}/apisix/admin/services" \
+      --header "X-API-KEY: ${APISIX_ADMIN_KEY:-}"
+    [[ "${API_RESPONSE_CODE}" == 200 ]] || return 1
+    # APISIX 3.x admin list shape: {"total":N,"list":[{"value":{"name":...}}]}
+    printf '%s' "${API_RESPONSE_BODY}" | jq -r '.list[]?.value.name? // empty'
+  else
+    api_request GET "${KONG_ADMIN_URL}/services"
+    [[ "${API_RESPONSE_CODE}" == 200 ]] || return 1
+    printf '%s' "${API_RESPONSE_BODY}" | jq -r '.data[]?.name? // empty'
+  fi
+}
+
+# True when at least one of the application's modules has a service in the
+# active gateway. Fails open (returns true) when the gateway admin API cannot
+# be queried or lists nothing at all: a broken probe must not block
+# registration — the smoke check still catches a genuinely unusable stack.
+application_routable_in_gateway() {
+  local names_file module_id
+  names_file="$(mktemp)"
+  # Subshell: gateway_module_service_names goes through api_request, whose
+  # API_RESPONSE_CODE/API_RESPONSE_BODY globals must not clobber the caller's
+  # 409 response body (it is still printed as the conflict notice below).
+  if ! ( gateway_module_service_names ) > "${names_file}" || [[ ! -s "${names_file}" ]]; then
+    rm -f "${names_file}"
+    return 0
+  fi
+
+  while IFS= read -r module_id; do
+    if [[ -n "${module_id}" ]] && grep -qx "${module_id}" "${names_file}"; then
+      rm -f "${names_file}"
+      return 0
+    fi
+  done < <(jq -r '.discovery[].id' "${APP_DISCOVERY_PATH}" 2>/dev/null)
+
+  rm -f "${names_file}"
+  return 1
+}
+
+# Module routes are created only when mgr-applications first deploys the
+# descriptor and live in the gateway's own store (Kong: the kong schema in
+# postgres, APISIX: etcd). After a gateway switch with kept volumes the
+# descriptor and entitlements are still in the database, so every bootstrap
+# step would skip and the run would die much later at capabilities / user
+# creation with opaque 404 Route Not Found errors. Fail fast with the recovery
+# paths instead — the route-store counterpart of the version-skew halt.
+halt_on_gateway_without_module_routes() {
+  ui_error "Application ${APP_NAME} is registered, but this ${APIGW_TYPE:-kong} gateway has none of its module routes."
+  ui_info '  Module routes cannot be re-created for a registered application: mgr-applications'
+  ui_info '  refuses to deregister an application that is already enabled for a tenant.'
+  ui_info '  Recovery options:'
+  ui_info '    1. Clean switch: ./stop.sh and confirm removing volumes, then ./start.sh [--apisix].'
+  ui_info '    2. Switch back to the previous gateway: rerun ./start.sh without --apisix.'
+  exit 1
+}
+
 register_application_descriptor() {
   local system_access_token="$1"
   local max_retries=3 retry_count=0 registration_success=false
@@ -175,9 +242,12 @@ register_application_descriptor() {
       --data "@${APP_DESCRIPTOR_PATH}"
 
     if [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
-      print_api_notice 'Application descriptor is already registered' "$API_RESPONSE_BODY"
-      registration_success=true
-      break
+      if application_routable_in_gateway; then
+        print_api_notice 'Application descriptor is already registered' "$API_RESPONSE_BODY"
+        registration_success=true
+        break
+      fi
+      halt_on_gateway_without_module_routes
     elif [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
       ui_ok "Application descriptor registered for ${APP_NAME}."
       registration_success=true
@@ -200,6 +270,41 @@ register_application_descriptor() {
   fi
 }
 
+# Bulk discovery registration is the fast path for a clean bootstrap, but on a
+# warm stack the batch mixes already-registered module ids with new ones (e.g.
+# after --actualize bumped module versions) and the bulk endpoint rejects the
+# whole batch with 409. Register module-by-module then: 409 per module is a
+# benign skip, anything else is a real failure. Without this the entitlement
+# flow cancels over undiscovered modules (observed live: warm --actualize run
+# died at "Entitlement failed" with only the flow initializer stage finished).
+register_missing_module_discoveries() {
+  local system_access_token="$1"
+  local entry module_id registered=0 skipped=0
+
+  while IFS= read -r entry; do
+    [[ -n "${entry}" ]] || continue
+    module_id="$(printf '%s' "${entry}" | jq -r '.id')"
+
+    api_request POST "${GW_URL}/modules/${module_id}/discovery" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "${entry}"
+
+    if [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
+      registered=$((registered + 1))
+    elif [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
+      skipped=$((skipped + 1))
+    else
+      ui_warn "Discovery registration for ${module_id} failed with HTTP ${API_RESPONSE_CODE}:"
+      print_api_payload "$API_RESPONSE_BODY" stderr
+      return 1
+    fi
+  done < <(jq -c '.discovery[]' "${APP_DISCOVERY_PATH}")
+
+  ui_info "Discovery information ready: ${registered} module(s) registered, ${skipped} already present."
+  return 0
+}
+
 register_discovery_information() {
   local system_access_token="$1"
   local max_retries=3 retry_count=0 discovery_success=false
@@ -217,7 +322,12 @@ register_discovery_information() {
       --data "@${APP_DISCOVERY_PATH}"
 
     if [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
-      print_api_notice 'Discovery information is already registered' "$API_RESPONSE_BODY"
+      # Warm stack: fall back to per-module registration so modules that are
+      # new since the last run still get their discovery registered.
+      if ! register_missing_module_discoveries "$system_access_token"; then
+        ui_error 'Failed to register discovery information after the per-module fallback.'
+        exit 1
+      fi
       discovery_success=true
       break
     elif [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
@@ -299,7 +409,7 @@ wait_for_capabilities() {
 create_tenant_and_enable_application() {
   local system_access_token="$1"
   local diku_tenant_id entitlement_flow_id status existing_entitlement_count entitlement_finished=false
-  local entitlement_elapsed failed_stages
+  local entitlement_elapsed failed_stages same_name_entitlement_id
   local max_wait=120 elapsed=0
   local si=0 spin_char
 
@@ -343,11 +453,28 @@ create_tenant_and_enable_application() {
     return 0
   fi
 
-  ui_step "Enabling (entitling) ${APP_NAME} for tenant 'diku'"
-  api_request POST "${GW_URL}/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true" \
-    --header 'Content-Type: application/json' \
-    --header "x-okapi-token: ${system_access_token}" \
-    --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  # A warm --actualize bumps the descriptor to a new application id while the
+  # tenant keeps the entitlement of a previous id of the same application name.
+  # mgr-tenant-entitlements rejects a second entitle for a name whose last flow
+  # finished ("Entitle flow finished" -> the whole flow is cancelled), so a new
+  # version of an already-enabled application must go through the upgrade
+  # operation (PUT /entitlements) instead of a fresh POST.
+  same_name_entitlement_id="$(printf '%s\n' "${API_RESPONSE_BODY}" | jq -r --arg prefix "${APP_NAME}-" \
+    'if type == "array" then .[] | (.id // .applicationId // empty) elif .applicationDescriptors? != null then [.applicationDescriptors[]? | (.id // .applicationId // empty)][] elif .applications? != null then [.applications[]? | (.id // .applicationId // empty)][] else empty end | select(startswith($prefix))' | head -n 1)"
+
+  if [[ -n "${same_name_entitlement_id}" ]]; then
+    ui_step "Upgrading entitlement for ${APP_NAME} to the new version for tenant 'diku'"
+    api_request PUT "${GW_URL}/entitlements?async=true&tenantParameters=loadSample=true,loadReference=true" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  else
+    ui_step "Enabling (entitling) ${APP_NAME} for tenant 'diku'"
+    api_request POST "${GW_URL}/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  fi
 
   if [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
     ui_ok 'Application enabled for tenant.'

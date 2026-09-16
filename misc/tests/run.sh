@@ -93,6 +93,9 @@ shell_tests=(
   misc/tests/test-sidecar-resources.sh
   misc/tests/test-build-images-failure.sh
   misc/tests/test-native-sidecar-not-in-arm-queue.sh
+  misc/tests/test-arm-queue-gateway-scoping.sh
+  misc/tests/test-gateway-route-guard.sh
+  misc/tests/test-warm-actualize-recovery.sh
   misc/tests/test-image-freshness.sh
   misc/tests/test-vault-token.sh
   misc/tests/test-credentials-initialization.sh

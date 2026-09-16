@@ -13,6 +13,12 @@ CLONE_DIR="folio-tools"
 IMAGE_NAME_openjdk17="folioci/alpine-jre-openjdk17:latest"
 IMAGE_NAME_openjdk21="folioci/alpine-jre-openjdk21:latest"
 BASE_URL="https://github.com/folio-org"
+# Last anonymously buildable folio-apisix revision: master's Dockerfile has
+# required the subscription-walled dhi.io/apisix base image since 289fea7
+# (2026-07-10), which fails anonymous base-image pulls with 401. Used only by
+# the arm64 gateway build below; drop the pin once upstream master builds
+# anonymously again.
+FOLIO_APISIX_BUILD_REF="159ad2f55dc34d364bbbdc660b019b297f894c45"
 
 # Resolve repo-relative inputs to absolute paths before we cd into a throwaway
 # working directory, so the script is location-independent.
@@ -226,6 +232,18 @@ build_module_steps() (
 
     cd "$name"
 
+    # folio-apisix only: build from the pinned revision (see the constant at the
+    # top) instead of the derived branch tip. Any other module keeps the
+    # tag-derived ref.
+    if [[ "$name" == "folio-apisix" ]]; then
+        if ! { git fetch --depth 1 --quiet origin "$FOLIO_APISIX_BUILD_REF" \
+            && git checkout --quiet FETCH_HEAD; }; then
+            printf 'pin' >&2
+            printf 'pin'
+            exit 0
+        fi
+    fi
+
     if [ "$skip_maven" != "true" ]; then
         if ! mvn -T 1C -q --no-transfer-progress -DskipTests -DskipITs -Dmaven.javadoc.skip=true clean install >&2; then
             printf 'maven'
@@ -395,11 +413,17 @@ enqueue_effective_image_ref "${MGR_APPLICATIONS_IMAGE:-}" "false"
 if [[ "${SIDECAR_MODE:-jvm}" != "native" ]]; then
     enqueue_effective_image_ref "${FOLIO_MODULE_SIDECAR_IMAGE:-}" "false"
 fi
-enqueue_effective_image_ref "${FOLIO_KONG_IMAGE:-}" "true"
 enqueue_effective_image_ref "${FOLIO_KEYCLOAK_IMAGE:-}" "true"
-# folioci/folio-apisix is published amd64-only; without an arm64 rebuild the
-# gateway runs under QEMU emulation on Apple Silicon.
-enqueue_effective_image_ref "${FOLIO_APISIX_IMAGE:-}" "true"
+# Only the selected gateway's image belongs in the arm64 queue — the Image plan
+# in bootstrap-engine.sh scopes itself the same way, and building the unused
+# gateway must never be able to fail the run.
+if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    # folioci/folio-apisix is published amd64-only; without an arm64 rebuild the
+    # gateway runs under QEMU emulation on Apple Silicon.
+    enqueue_effective_image_ref "${FOLIO_APISIX_IMAGE:-}" "true"
+else
+    enqueue_effective_image_ref "${FOLIO_KONG_IMAGE:-}" "true"
+fi
 
 if (( NATIVE_SKIP_COUNT > 0 )); then
     ui_info "Skipping ${NATIVE_SKIP_COUNT} image(s) — native arm64 images already present"
