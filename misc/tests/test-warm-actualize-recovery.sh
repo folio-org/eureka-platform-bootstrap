@@ -25,10 +25,14 @@ stub_bin="$(mktemp -d)"
 test_dir="$(mktemp -d)"
 output_file="$(mktemp)"
 entitlement_log="$(mktemp)"
-trap 'rm -rf "${stub_bin}" "${test_dir}"; rm -f "${output_file}" "${entitlement_log}"' EXIT
+transient_marker="$(mktemp)"
+rm -f "${transient_marker}"
+trap 'rm -rf "${stub_bin}" "${test_dir}"; rm -f "${output_file}" "${entitlement_log}" "${transient_marker}"' EXIT
 
 # curl stub: mirrors api_request's response contract (body + status line) for
 # -w calls, and a pure body for the plain token pipes (jq reads those whole).
+# The per-module discovery POST for mod-alpha answers 503 exactly once when
+# DISCOVERY_503_MARKER is armed (drives the one-shot transient retry).
 cat > "${stub_bin}/curl" <<'EOF'
 #!/usr/bin/env bash
 body=''
@@ -39,9 +43,14 @@ case "$*" in
   *"realms/master/protocol/openid-connect/token"*|*"realms/diku/protocol/openid-connect/token"*)
     body='{"access_token":"stub-token"}' ;;
   *"/modules/"*"/discovery"*)
-    # Single-module create: mod-alpha is new (201), mod-beta already present (409).
     case "$*" in
-      *mod-alpha*) body='{"id":"mod-alpha-1.0.0"}'; status='201' ;;
+      *mod-alpha*)
+        if [[ -n "${DISCOVERY_503_MARKER:-}" && ! -f "${DISCOVERY_503_MARKER}" ]]; then
+          touch "${DISCOVERY_503_MARKER}"
+          body='{"errors":[{"message":"no upstream"}]}'; status='503'
+        else
+          body='{"id":"mod-alpha-1.0.0"}'; status='201'
+        fi ;;
       *) body='{"errors":[{"message":"Module Discovery already exists"}]}'; status='409' ;;
     esac ;;
   *"/modules/discovery"*)
@@ -76,6 +85,12 @@ fi
 EOF
 chmod +x "${stub_bin}/curl"
 
+cat >"${stub_bin}/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${stub_bin}/sleep"
+
 DEBUG=false
 # shellcheck source=/dev/null
 source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
@@ -106,6 +121,24 @@ run_discovery() {
 run_discovery || { cat "${output_file}" >&2; fail 'discovery fallback failed'; }
 grep -q '1 module(s) registered, 1 already present' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'discovery fallback summary is wrong'; }
+
+# A 503 on a per-module discovery POST gets exactly one bounded retry, which
+# here succeeds — the fallback summary must be unchanged.
+rm -f "${transient_marker}"
+set +e
+(
+  PATH="${stub_bin}:${PATH}" \
+  DISCOVERY_503_MARKER="${transient_marker}" \
+    register_discovery_information system-token \
+  > "${output_file}" 2>&1
+)
+transient_status=$?
+set -e
+[[ ${transient_status} -eq 0 ]] || { cat "${output_file}" >&2; fail 'per-module transient 503 was not retried to success'; }
+grep -q 'retrying once' "${output_file}" \
+  || { cat "${output_file}" >&2; fail 'missing the transient-retry notice'; }
+grep -q '1 module(s) registered, 1 already present' "${output_file}" \
+  || { cat "${output_file}" >&2; fail 'transient retry changed the fallback summary'; }
 
 run_enable() {
   : > "${entitlement_log}"

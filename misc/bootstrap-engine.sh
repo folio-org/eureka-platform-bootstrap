@@ -122,38 +122,6 @@ resolve_app_services() {
   fi
 }
 
-# The creation notice must be emitted OUTSIDE ui_run: ui_run folds helper
-# output in non-debug mode, so an in-helper ui_info would never reach the
-# operator on a default run.
-refresh_local_credentials() {
-  local credentials_existed=false
-  if [[ -f "${DOCKER_DIR}/.env.local.credentials" ]]; then
-    credentials_existed=true
-  fi
-
-  ui_run 'refreshing local credentials and defaults' refresh_local_credentials_file
-
-  # A hand-edited or renamed credentials file being silently reset to defaults
-  # is exactly the kind of thing the operator must see.
-  if [[ "${credentials_existed}" == false ]]; then
-    ui_info 'Created docker/.env.local.credentials (bootstrap-managed defaults)'
-  fi
-}
-
-refresh_local_credentials_file() {
-  # Load in effective-precedence order before writing the generated credentials
-  # file. This keeps a first-run docker/.env.local override from being replaced
-  # by the fallback embedded in local-credentials.sh.
-  load_folio_config credentials
-  load_folio_config local
-  load_folio_config defaults
-
-  (
-    cd "${DOCKER_DIR}"
-    write_default_local_credentials_file
-  )
-}
-
 # The sidecar image (and its tag) is owned entirely by docker/.env(.local) —
 # there is no native-mode tag override. Native mode reuses the same versioned tag
 # (e.g. folioorg/folio-module-sidecar:4.0.1) and rebuilds it locally from the
@@ -277,12 +245,10 @@ else:
 PY
 }
 
-# Collect one display row into PLAN_ROWS and tally present/build counts. The
-# image plan is a sub-panel of "Prepare config", not a numbered phase, so the
-# rows are rendered together as a box after every row is gathered.
-# Short, fixed-width display label for the ACTION column. Derived from the verbose
-# image_plan_action string, which is kept intact for the build-decision case below
-# (and is asserted verbatim by the capture test).
+# Collect one display row into PLAN_ROWS and tally present/build counts for the
+# "Prepare config" plan panel. image_action_label keeps the ACTION column short;
+# the verbose image_plan_action strings stay intact for the build decision (and
+# are asserted verbatim by the capture test).
 image_action_label() {
   local name="$1"
   local action="$2"
@@ -313,38 +279,12 @@ image_source_label() {
   esac
 }
 
-set_image_plan_column_widths() {
-  local inner fixed remaining
-
-  PLAN_AGE_WIDTH=4
-  PLAN_SOURCE_WIDTH=10
-  PLAN_ACTION_WIDTH=7
-  inner="$(ui_box_inner_width 2>/dev/null || printf 74)"
-  fixed=$((PLAN_AGE_WIDTH + PLAN_SOURCE_WIDTH + PLAN_ACTION_WIDTH + 4))
-  remaining=$((inner - fixed))
-  (( remaining < 36 )) && remaining=36
-
-  PLAN_NAME_WIDTH=$((remaining / 3))
-  (( PLAN_NAME_WIDTH < 23 )) && PLAN_NAME_WIDTH=23
-  (( PLAN_NAME_WIDTH > 28 )) && PLAN_NAME_WIDTH=28
-  PLAN_IMAGE_WIDTH=$((remaining - PLAN_NAME_WIDTH))
-  if (( PLAN_IMAGE_WIDTH < 24 )); then
-    PLAN_IMAGE_WIDTH=24
-    PLAN_NAME_WIDTH=$((remaining - PLAN_IMAGE_WIDTH))
-    (( PLAN_NAME_WIDTH < 12 )) && PLAN_NAME_WIDTH=12
-  fi
-}
-
+# Fixed column layout: NAME 24 · IMAGE 38 · AGE 5 · SRC 11 · ACTION 8.
 print_image_plan_row() {
   local name="$1"
   local image_ref="$2"
   local source="$3"
-  local action age age_display source_display row
-  local name_width="${PLAN_NAME_WIDTH:-18}"
-  local image_width="${PLAN_IMAGE_WIDTH:-26}"
-  local age_width="${PLAN_AGE_WIDTH:-4}"
-  local source_width="${PLAN_SOURCE_WIDTH:-10}"
-  local action_width="${PLAN_ACTION_WIDTH:-7}"
+  local action age row
 
   [[ -n "${image_ref}" ]] || return 0
   action="$(image_plan_action "${name}" "${image_ref}")"
@@ -364,18 +304,12 @@ print_image_plan_row() {
   fi
   PLAN_TOTAL_COUNT=$((PLAN_TOTAL_COUNT + 1))
   [[ "${age}" != '-' ]] && PLAN_PRESENT_COUNT=$((PLAN_PRESENT_COUNT + 1))
-  # Display-only compaction so the columns fit the box (width derived from
-  # ui_box_inner_width / ui_content_width) without truncation: drop image_age's
-  # " ago" suffix ("1h ago" -> "1h", "-" stays "-") and use a short ACTION label.
-  # The underlying age/action values above are unchanged.
-  age_display="${age% ago}"
-  source_display="$(image_source_label "${source}")"
-  printf -v row '%-*s %-*s %-*s %-*s %-*s' \
-    "${name_width}" "$(ui_trunc "${name}" "${name_width}")" \
-    "${image_width}" "$(ui_trunc_left "${image_ref}" "${image_width}")" \
-    "${age_width}" "$(ui_trunc "${age_display}" "${age_width}")" \
-    "${source_width}" "$(ui_trunc "${source_display}" "${source_width}")" \
-    "${action_width}" "$(ui_trunc "$(image_action_label "${name}" "${action}")" "${action_width}")"
+  printf -v row '%-24s %-38s %-5s %-11s %s' \
+    "$(ui_trunc "${name}" 24)" \
+    "$(ui_trunc_tail "${image_ref}" 38)" \
+    "${age% ago}" \
+    "$(image_source_label "${source}")" \
+    "$(image_action_label "${name}" "${action}")"
   PLAN_ROWS+=("${row}")
 }
 
@@ -392,7 +326,6 @@ print_image_plan() {
   SKEW_MODULES=()
   SKEW_DESCRIPTOR_VERSIONS=()
   SKEW_IMAGE_TAGS=()
-  set_image_plan_column_widths
 
   print_image_plan_row 'mgr-applications' "${MGR_APPLICATIONS_IMAGE:-}" "$(image_source_for_var MGR_APPLICATIONS_IMAGE default)"
   print_image_plan_row 'mgr-tenants' "${MGR_TENANTS_IMAGE:-}" "$(image_source_for_var MGR_TENANTS_IMAGE default)"
@@ -429,19 +362,14 @@ print_image_plan() {
     fi
   done < <(jq -r '.modules[] | [.name, .version] | @tsv' "${APP_DESCRIPTOR_PATH}")
 
-  local plan_sep header_row; plan_sep="$(ui_glyph bullet)"
-  printf -v header_row '%-*s %-*s %-*s %-*s %-*s' \
-    "${PLAN_NAME_WIDTH}" 'NAME' \
-    "${PLAN_IMAGE_WIDTH}" 'IMAGE' \
-    "${PLAN_AGE_WIDTH}" 'AGE' \
-    "${PLAN_SOURCE_WIDTH}" 'SRC' \
-    "${PLAN_ACTION_WIDTH}" 'ACTION'
-  ui_box_top 'image plan' "${PLAN_TOTAL_COUNT} images ${plan_sep} ${PLAN_PRESENT_COUNT} present ${plan_sep} ${PLAN_BUILD_COUNT} build"
-  ui_box_row "${header_row}"
+  ui_panel 'image plan' \
+    "${PLAN_TOTAL_COUNT} images ${UI_BULLET} ${PLAN_PRESENT_COUNT} present ${UI_BULLET} ${PLAN_BUILD_COUNT} build"
+  printf -v row '%-24s %-38s %-5s %-11s %s' 'NAME' 'IMAGE' 'AGE' 'SRC' 'ACTION'
+  ui_info "${row}"
   for row in "${PLAN_ROWS[@]}"; do
-    ui_box_row "${row}"
+    ui_info "${row}"
   done
-  ui_box_bottom
+  ui_panel_end
 }
 
 # Arm a refresh-to-latest: rebuild built images instead of reusing local ones, and
@@ -496,15 +424,11 @@ native_sidecar_reusable() {
     && sidecar_image_is_native_binary "${image}"
 }
 
-# In native mode the :native tag selected above does not exist until we build it:
-# compile folio-module-sidecar to a GraalVM native binary and package it into a
-# lightweight image (misc/build-native-sidecar.sh). This is idempotent — if the
-# image is already present locally we reuse it, mirroring the build-images.sh/vault
-# skip pattern — unless REBUILD_NATIVE_SIDECAR forces a fresh build. The build is
-# long (5-10 min) and chatty; build-native-sidecar.sh folds its mvn/docker output
-# under a spinner (ui_run), showing the last lines only on failure. A native build
-# failure is fatal: the selected :native image would be missing, so we
-# abort with guidance instead of letting Compose fail on a non-existent image.
+# In native mode the sidecar image does not exist until we build it:
+# misc/build-native-sidecar.sh compiles a GraalVM native binary and packages it
+# (idempotent — reused when present, unless --rebuild-native-sidecar forces a
+# fresh build; its chatty output is folded with the tail shown on failure). A
+# build failure is fatal: Compose would otherwise fail on a missing image.
 ensure_native_sidecar_image() {
   [[ "${SIDECAR_MODE}" == "native" ]] || return 0
 
@@ -521,14 +445,10 @@ ensure_native_sidecar_image() {
   fi
 }
 
-# A native (GraalVM) sidecar is a different runtime from the JVM sidecar, so its
-# resource envelope differs: it ignores JAVA_OPTIONS entirely (the ZGC/heap/jdwp
-# flags are inert) and its resident footprint is a fraction of the JVM's. In
-# native mode we therefore blank SIDECAR_JAVA_OPTIONS and lower the per-sidecar
-# memory limit. SIDECAR_MODE is the single source for this — we derive from it
-# rather than adding a second switch. An operator value (shell or
-# docker/.env(.local), already sourced by load_folio_config) always wins. JVM mode
-# is untouched: the compose defaults apply.
+# A native sidecar ignores JAVA_OPTIONS and needs far less memory than the JVM
+# sidecar, so native mode blanks SIDECAR_JAVA_OPTIONS and lowers the memory
+# limit. SIDECAR_MODE is the single switch; an operator value (shell or
+# docker/.env(.local)) always wins, and JVM mode keeps the compose defaults.
 NATIVE_SIDECAR_MEMORY_LIMIT='128m'
 
 select_sidecar_resources() {
@@ -573,13 +493,10 @@ ensure_host_entries() {
   done
 }
 
-# Surface host-readiness problems before any long-running step, so the operator
-# sees a clear cause up front instead of a confusing failure mid-bootstrap. An
-# unreachable daemon is a hard fail by design: every later check would report
-# false diagnoses (zero MemTotal, our own stack's ports counted as "foreign").
-# The memory and port checks are warn-only on purpose: on Linux `docker info`
-# MemTotal is host RAM (not an allocatable limit), and a busy port is often just
-# a warm re-run of this same stack — neither should hard-block the supported flow.
+# Surface host-readiness problems before any long-running step. An unreachable
+# daemon is a hard fail (every later check would misdiagnose); memory and port
+# checks are warn-only: Linux MemTotal is host RAM, not an allocatable limit,
+# and a busy port is often just a warm re-run of this same stack.
 MIN_DOCKER_MEMORY_GB="${MIN_DOCKER_MEMORY_GB:-12}"
 HOST_REQUIRED_PORTS="${HOST_REQUIRED_PORTS:-8000 8080}"
 
@@ -676,27 +593,23 @@ create_default_admin_user() {
 # choices are resolved later (the interactive prompts run inside the Configure phase),
 # so they are surfaced by print_run_mode rather than crammed into this banner.
 print_run_banner() {
-  local app_label arch banner_meta version sep
+  local app_label arch banner_meta version
   app_label="$(basename "$(dirname "${APP_DESCRIPTOR_PATH}")")"
   arch="$(uname -m)"
-  sep="$(ui_glyph bullet)"
-  banner_meta="${app_label} ${sep} ${arch}"
+  banner_meta="${app_label} ${UI_BULLET} ${arch}"
   version="$(git -C "${PROJECT_ROOT}" describe --tags 2>/dev/null || true)"
-  [[ -n "${version}" ]] && banner_meta="${version} ${sep} ${banner_meta}"
+  [[ -n "${version}" ]] && banner_meta="${version} ${UI_BULLET} ${banner_meta}"
 
   ui_title 'eureka platform bootstrap'
-  ui_note "  ${banner_meta}"
+  ui_info "${banner_meta}"
 }
 
 # One dim line summarizing the resolved run choices, printed inside the Configure
-# phase once the prompts have settled: the sidecar runtime and whether module
-# versions were actualized. It carries the sidecar token that used to live in the
-# banner (the banner now prints before the prompts, so it cannot show a chosen mode).
+# phase once the prompts have settled.
 print_run_mode() {
-  local sep modules
-  sep="$(ui_glyph bullet)"
+  local modules
   [[ "${ACTUALIZE_MODULES}" == 'true' ]] && modules='actualized' || modules='pinned'
-  ui_info "$(ui_c dim "${sep}") sidecar ${SIDECAR_MODE} $(ui_c dim "${sep}") modules ${modules} $(ui_c dim "${sep}") gateway ${APIGW_TYPE:-kong}"
+  ui_info "sidecar ${SIDECAR_MODE} ${UI_BULLET} modules ${modules} ${UI_BULLET} gateway ${APIGW_TYPE:-kong}"
 }
 
 print_final_summary() {
@@ -705,32 +618,28 @@ print_final_summary() {
   local smoke_status="${3:-not run}"
   local final_next_step="${4:-}"
 
-  ui_box_top "Bootstrap complete - ${final_status}" "total ${run_total}" done
-  ui_box_kv 'API gateway' "$(host_api_gateway_url)"
-  ui_box_kv 'Keycloak' 'http://localhost:8080'
-  ui_box_kv 'Tenant' 'diku'
-  ui_box_kv 'User' 'folio / folio'
-  ui_box_kv 'Smoke check' "${smoke_status}"
-  [[ -n "${final_next_step}" ]] && ui_box_kv_wrapped 'Next step' "${final_next_step}"
-  ui_box_bottom
+  ui_panel "Bootstrap complete - ${final_status}" "total ${run_total}"
+  ui_panel_kv 'API gateway' "$(host_api_gateway_url)"
+  ui_panel_kv 'Keycloak' 'http://localhost:8080'
+  ui_panel_kv 'Tenant' 'diku'
+  ui_panel_kv 'User' 'folio / folio'
+  ui_panel_kv 'Smoke check' "${smoke_status}"
+  [[ -n "${final_next_step}" ]] && ui_panel_kv 'Next step' "${final_next_step}"
+  ui_panel_end
 }
 
-# Re-reads the descriptor, regenerates discovery.json, cleans the managed
-# .env.local block, re-resolves services, and force-re-exports descriptor
-# module config (unset first so the "already set" guard in
-# export_descriptor_module_config does not skip the new values). Called once
-# during Prepare config and again after a skew-driven actualize.
-#
-# The actualizer's result summary ("Modules version updated:" lines /
-# "No updates were made.") goes to stdout, which ui_run folds away on success
-# in non-debug mode — the operator would never see what --actualize changed.
-# Capture the stdout in the helper and replay it after the step commits,
-# outside the fold (same pattern as the credentials creation notice above).
+# The actualizer's result summary goes to stdout, which ui_run folds away on
+# success — capture it in the helper and replay it after the step commits
+# (same pattern as the credentials creation notice above).
 run_module_version_actualizer() {
   ACTUALIZER_SUMMARY_FILE="$(mktemp)"
-  python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" \
-    --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}" \
-    >"${ACTUALIZER_SUMMARY_FILE}"
+  if ! python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" \
+      --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}" \
+      >"${ACTUALIZER_SUMMARY_FILE}"; then
+    rm -f "${ACTUALIZER_SUMMARY_FILE}"
+    ACTUALIZER_SUMMARY_FILE=''
+    return 1
+  fi
 }
 
 print_actualizer_summary() {
@@ -842,15 +751,17 @@ run_bootstrap_flow() {
   # Recovery is a plain re-run of ./start.sh — every step is idempotent.
   trap 'rc=$?; [[ $rc -ne 0 ]] && dump_failure_diagnostics || true; exit $rc' EXIT
 
-  # Set COMPOSE_FILE, GATEWAY_PROFILE, APIGW_URL, and APIGW_API_KEY based on
-  # APIGW_TYPE before the first docker compose call.
+  # Set COMPOSE_FILE and GATEWAY_PROFILE from APIGW_TYPE before the first
+  # docker compose call.
   select_gateway_config
 
-  # run_total is started in start.sh's main() as phase 01 (Configure) opens, so the
-  # completion box's total spans every numbered phase; here we continue into the next.
+  # Bring docker/.env(.local)(.credentials) values into this shell (set -a
+  # exports them): recover_api_gateway_if_needed and the route guard need
+  # APISIX_ADMIN_KEY, and compose inherits the interpolated defaults.
+  load_folio_config
+
   ui_phase 'Prepare config'
   capture_initial_image_env_names
-  refresh_local_credentials
   select_sidecar_resources
 
   ui_run 'preparing support images' bash "${PROJECT_ROOT}/misc/build-images.sh"
@@ -931,10 +842,8 @@ run_bootstrap_flow() {
   fi
 
   local run_total
-  run_total="$(ui_fmt_duration "$(ui_timer_read run_total 2>/dev/null || printf 0)")"
+  run_total="$(ui_fmt_seconds "$(( SECONDS - ${BOOTSTRAP_START:-${SECONDS}} ))")"
   ui_phase_finish done
-  ui_recap "${run_total}"
-
   print_final_summary "${final_status}" "${run_total}" "${smoke_status}" "${final_next_step}"
   return 0
 }

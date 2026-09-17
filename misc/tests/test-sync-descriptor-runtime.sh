@@ -81,7 +81,6 @@ ASSUME_YES='true'
 ACTUALIZE_MODULES='false'
 UI_UNICODE=false
 UI_COLOR=false
-ui_cols() { printf '140\n'; }
 
 # --- Test A: operator override survives the sync and shows up as skew ---------
 # Exported, so the pre-run shell-env provenance arm (initial_env_has_name) is

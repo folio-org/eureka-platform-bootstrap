@@ -24,3 +24,4 @@ docker/.env.local*
 .zcode/
 docs/superpowers/
 skills-lock.json
+.DS_Store

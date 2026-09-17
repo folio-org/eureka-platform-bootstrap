@@ -261,12 +261,11 @@ build_module_steps() (
 
 # One background job: run the pipeline captured, measure its elapsed, publish the
 # status file atomically (temp name + mv) so the dispatcher never reads a partial
-# write. Status format: "<ok|clone|maven|docker|build> <elapsed_ms> <tag>".
+# write. Status format: "<ok|clone|maven|docker|build> <elapsed_seconds> <tag>".
 build_module_job() {
     local name="$1" version="$2" skip_maven="$3" tag="$4"
-    local stage elapsed
+    local start="${SECONDS}" stage elapsed
 
-    ui_timer_start "job_${name}"
     if [[ "${DEBUG:-false}" == "true" ]]; then
         if ! stage="$(build_module_steps "$name" "$version" "$skip_maven" "$tag")"; then
             stage='build'
@@ -276,7 +275,7 @@ build_module_job() {
             stage='build'
         fi
     fi
-    elapsed="$(ui_timer_read "job_${name}" 2>/dev/null || printf 0)"
+    elapsed=$(( SECONDS - start ))
     rm -rf "${WORK_DIR:?}/${name:?}"
     printf '%s %s %s\n' "${stage:-ok}" "${elapsed}" "${tag}" > "${STATUS_DIR}/.${name}.tmp"
     mv "${STATUS_DIR}/.${name}.tmp" "${STATUS_DIR}/${name}"
@@ -285,11 +284,10 @@ build_module_job() {
 # Dispatcher + monitor: keep <= NUM_JOBS jobs running, tick one aggregate spinner
 # line ([done/total] + the names currently building), and commit one permanent
 # timed row per finished image. Append-only per the console-UI contract; in a
-# pipe the ticks are silent and only the committed rows appear. Under DEBUG the
-# jobs stream their output, so the spinner is skipped like ui_run does.
+# pipe the ticks are silent and only the committed rows appear.
 dispatch_builds() {
     local total="${QUEUE_COUNT}" next=0 done_count=0 idx
-    local si=0 spin_char names names_width state elapsed tag message
+    local build_start="${SECONDS}" names state elapsed tag message
     local reported=()
 
     if (( total == 0 )); then
@@ -298,12 +296,7 @@ dispatch_builds() {
 
     for (( idx = 0; idx < total; idx++ )); do reported[idx]=0; done
 
-    ui_timer_start build_images
-    if [[ "${DEBUG:-false}" == "true" ]]; then
-        ui_step "Building images"
-    else
-        ui_activity_start "Building images"
-    fi
+    ui_step "Building images"
 
     while (( done_count < total )); do
         while (( next < total )) && [ "$(jobs -p | wc -l)" -lt "${NUM_JOBS}" ]; do
@@ -319,11 +312,11 @@ dispatch_builds() {
             reported[idx]=1
             done_count=$((done_count + 1))
             read -r state elapsed tag < "${STATUS_DIR}/${QUEUE_NAMES[$idx]}"
-            ui_spinner_clear
+            ui_progress_end
             if [[ "${state}" == "ok" ]]; then
-                ui_status_timed ok "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} $(ui_glyph arrow) ${tag}" "${elapsed}"
+                ui_ok "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} -> ${tag} ($(ui_fmt_seconds "${elapsed}"))"
             else
-                ui_status_timed fail "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} $(ui_glyph bullet) ${state} failed" "${elapsed}"
+                ui_fail "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} ${UI_BULLET} ${state} failed ($(ui_fmt_seconds "${elapsed}"))"
                 FAILED_MODULES+=("${QUEUE_NAMES[$idx]}")
                 FAILED_COUNT=$((FAILED_COUNT + 1))
             fi
@@ -343,8 +336,8 @@ dispatch_builds() {
                 fi
                 reported[idx]=1
                 done_count=$((done_count + 1))
-                ui_spinner_clear
-                ui_fail "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} $(ui_glyph bullet) build failed (no status)"
+                ui_progress_end
+                ui_fail "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} build failed (no status)"
                 FAILED_MODULES+=("${QUEUE_NAMES[$idx]}")
                 FAILED_COUNT=$((FAILED_COUNT + 1))
             done
@@ -358,33 +351,21 @@ dispatch_builds() {
                     names="${names:+${names}, }${QUEUE_NAMES[$idx]}"
                 fi
             done
-            # Leave room for the "Building images", [n/m], and elapsed segments;
-            # ui_trunc treats a negative width as invalid, so floor it here.
-            names_width=$(( $(ui_content_width) - 40 ))
-            (( names_width < 8 )) && names_width=8
-            names="$(ui_trunc "${names}" "${names_width}")"
+            names="$(ui_trunc "${names}" 60)"
             message="Building images"
-            [[ -n "${names}" ]] && message="${message} $(ui_glyph bullet) ${names}"
-            spin_char="$(_ui_spin_frame "$((si++))")"
-            ui_activity_tick "${spin_char}" "${message}" "${done_count}/${total}" \
-                "$(ui_timer_read build_images 2>/dev/null || printf 0)"
+            [[ -n "${names}" ]] && message="${message}: ${names}"
+            ui_progress "${message}" "${done_count}/${total}" "$(( SECONDS - build_start ))"
         fi
         sleep 0.3
     done
     wait
 
-    if [[ "${DEBUG:-false}" == "true" ]]; then
-        if (( FAILED_COUNT > 0 )); then
-            ui_status_timed fail "Built $((done_count - FAILED_COUNT))/${total} images" "$(ui_timer_read build_images 2>/dev/null || printf 0)"
-        else
-            ui_status_timed ok "Built ${total} images" "$(ui_timer_read build_images 2>/dev/null || printf 0)"
-        fi
+    local total_elapsed
+    total_elapsed="$(ui_fmt_seconds "$(( SECONDS - build_start ))")"
+    if (( FAILED_COUNT > 0 )); then
+        ui_fail "Built $((done_count - FAILED_COUNT))/${total} images (${total_elapsed})"
     else
-        if (( FAILED_COUNT > 0 )); then
-            ui_activity_finish fail "Built $((done_count - FAILED_COUNT))/${total} images" "$(ui_timer_read build_images 2>/dev/null || printf 0)"
-        else
-            ui_activity_finish ok "Built ${total} images" "$(ui_timer_read build_images 2>/dev/null || printf 0)"
-        fi
+        ui_ok "Built ${total} images (${total_elapsed})"
     fi
 }
 

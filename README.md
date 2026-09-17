@@ -24,9 +24,10 @@ and bootstrap repository.
 - asks up to three setup questions (actualize module versions; native or JVM
   sidecar; Kong or APISIX gateway) plus conditional follow-ups — ARM image
   builds happen automatically when needed, they are not a question
-- creates or updates local env files (`docker/.env.local`, `docker/.env.local.credentials`)
 - starts `core`, then `mgr-components`, then the bundled `app-platform-minimal`
   services by name
+- persists the runtime Vault root token to `docker/.env.local.credentials`
+  (deterministic development defaults live committed in `docker/.env`)
 - registers the bundled application descriptor and discovery metadata
 - creates tenant `diku` and the default admin user `folio/folio`
 - finishes with a short smoke check (api-gateway reachable, tenant token, `diku`
@@ -51,7 +52,8 @@ and bootstrap repository.
 | --- | --- |
 | `start.sh` | argument parsing, prompts, tool checks, run the flow |
 | `misc/bootstrap-engine.sh` | phase orchestration (`run_bootstrap_flow`) and local setup |
-| `misc/lib/folio-common.sh` | logging, config loading, output helpers, dependency checks |
+| `misc/lib/ui.sh` | presentation helpers (stderr-only, color-gated) |
+| `misc/lib/folio-common.sh` | config loading (precedence) and dependency checks |
 | `misc/lib/folio-api.sh` | tokens, descriptor/discovery registration, entitlement, smoke check |
 | `misc/lib/docker-health.sh` | container health and HTTP route readiness waits |
 
@@ -134,9 +136,10 @@ Override the gateway image in `docker/.env` or via shell env:
 
 ## Configuration model
 
-- `docker/.env` — committed defaults
+- `docker/.env` — committed defaults (deterministic local development credentials)
 - `docker/.env.local` — local non-secret overrides (image tags, generated versions)
-- `docker/.env.local.credentials` — local secrets and Vault token state
+- `docker/.env.local.credentials` — the runtime Vault root token, plus any
+  operator-added secrets (never committed)
 
 Service-level environment variables are defined inline in the Compose files.
 
@@ -158,23 +161,6 @@ bash misc/tests/run.sh                 # offline: shell syntax + python unit tes
 ./start.sh --yes
 ```
 
-## Agent skill
-
-The source of the `local-eureka-env` agent Skill lives in
-[`skills/local-eureka-env/`](skills/local-eureka-env/SKILL.md). It teaches coding
-agents to operate this environment from any FOLIO repository: run Karate or
-integration tests against it, deploy locally built module images, attach
-debuggers, and reproduce or verify issues.
-
-Install it from the repository root:
-
-```bash
-npx skills add .                                  # interactive: select local-eureka-env
-npx skills add . --skill local-eureka-env --global --agent claude-code --agent opencode
-```
-
 ## Documentation
 
-- Architecture overview: `docs/architecture/README.md`
-- Supported workflows: `docs/architecture/supported-workflows.md`
-- Roadmap: `docs/roadmap/README.md`
+- Architecture and internal model: `docs/architecture.md`

@@ -80,11 +80,13 @@ kong_with_modules="$(mktemp)"
 jq -n '{data: [{name: "mgr-applications-4.0.0"}, {name: "mod-alpha-1.0.0"}]}' > "${kong_with_modules}"
 kong_mgr_only="$(mktemp)"
 jq -n '{data: [{name: "mgr-applications-4.0.0"}, {name: "mgr-tenants-1.0.0"}]}' > "${kong_mgr_only}"
+kong_empty="$(mktemp)"
+jq -n '{data: []}' > "${kong_empty}"
 apisix_with_modules="$(mktemp)"
 jq -n '{total: 2, list: [{value: {name: "mgr-tenants-1.0.0"}}, {value: {name: "mod-beta-2.0.0"}}]}' > "${apisix_with_modules}"
 apisix_mgr_only="$(mktemp)"
 jq -n '{total: 2, list: [{value: {name: "mgr-tenants-1.0.0"}}, {value: {name: "mgr-applications-4.0.0"}}]}' > "${apisix_mgr_only}"
-trap 'rm -rf "${stub_bin}" "${test_dir}"; rm -f "${output_file}" "${kong_with_modules}" "${kong_mgr_only}" "${apisix_with_modules}" "${apisix_mgr_only}"' EXIT
+trap 'rm -rf "${stub_bin}" "${test_dir}"; rm -f "${output_file}" "${kong_with_modules}" "${kong_mgr_only}" "${kong_empty}" "${apisix_with_modules}" "${apisix_mgr_only}"' EXIT
 
 # Warm re-run: module services present -> the 409 stays a benign skip.
 run_registration kong "${kong_with_modules}" \
@@ -100,6 +102,11 @@ grep -q 'none of its module routes' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'missing the route-state halt explanation'; }
 grep -q 'Recovery options' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'missing the recovery guidance'; }
+
+# Reachable admin API that lists ZERO services: still a routeless gateway (a
+# fresh gateway store behind a kept database) — must halt, not fail open.
+run_registration kong "${kong_empty}" \
+  && { cat "${output_file}" >&2; fail 'empty gateway service list must halt the bootstrap'; }
 
 # Same discrimination on the APISIX admin shape.
 run_registration apisix "${apisix_with_modules}" \

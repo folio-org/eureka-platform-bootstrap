@@ -76,7 +76,9 @@ chmod +x "${stub_bin}/docker"
 
 cat >"${stub_bin}/curl" <<'EOF'
 #!/usr/bin/env bash
-# Admin API probe never answers inside the hermetic run.
+# Admin API probe never answers inside the hermetic run; args are logged so
+# cases can assert what the probe sent.
+printf '%s\n' "$*" >> "${CURL_ARGS_LOG:-/dev/null}"
 printf '000'
 EOF
 chmod +x "${stub_bin}/curl"
@@ -143,15 +145,23 @@ RECOVERY_FIXES=false STUCK_NAME=other-service run_health_wait
 [[ ! -s "${stdout_file}" ]] || { sed 's/^/stdout: /' "${stdout_file}" >&2; fail 'health wait wrote to stdout'; }
 
 # Case 4: APISIX gateway stuck while running -> recovery restarts the container
-# (the kong in-place migrations do not apply) and the wait completes.
+# (the kong in-place migrations do not apply) and the wait completes. The admin
+# probe must carry the configured APISIX_ADMIN_KEY — the flow loads it from
+# docker/.env, an empty key would disable both recovery and the route guard.
 : >"${marker_file}"
+curl_args_log="$(mktemp)"
+: >"${curl_args_log}"
+export CURL_ARGS_LOG="${curl_args_log}" APISIX_ADMIN_KEY=test-admin-key
 APIGW_TYPE=apisix RECOVERY_FIXES=true STUCK_NAME=api-gateway run_health_wait
-unset APIGW_TYPE
+unset APIGW_TYPE CURL_ARGS_LOG APISIX_ADMIN_KEY
 [[ ${run_status} -eq 0 ]] || { cat "${stderr_file}" >&2; fail "health wait failed although apisix restart helped"; }
 [[ "$(recovery_count)" == '1' ]] \
   || { cat "${stderr_file}" >&2; fail "expected exactly one apisix restart, got '$(recovery_count)'"; }
 grep -q 'restart' "${marker_file}" \
   || { cat "${marker_file}" >&2; fail 'apisix recovery did not restart the container'; }
+grep -q 'X-API-KEY: test-admin-key' "${curl_args_log}" 2>/dev/null \
+  || { cat "${stderr_file}" >&2; fail 'apisix recovery probe did not send the configured admin key'; }
+rm -f "${curl_args_log}"
 
 # Case 5: the Docker daemon dies mid-wait -> the wait fails loudly instead of
 # reading an empty container list as "all healthy".
@@ -219,5 +229,162 @@ grep -q 'rm -f /usr/local/kong/pids/nginx.pid' "${stderr_file}" \
   || { cat "${stderr_file}" >&2; fail 'diagnostics did not print the in-container fix command'; }
 grep -q 'rerun ./start.sh after ./stop.sh' "${stderr_file}" \
   || fail 'diagnostics did not print the stop/start alternative'
+
+# Case 7: diagnostics surface a container's ERROR lines above graceful-shutdown
+# noise, and the memory hint stays gated on OOM evidence (exit 137 / OOMKilled)
+# instead of firing on any failure.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=diag-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\n%s\tExited (%s)\n' "${DIAG_NAME:-mgr-applications}" "${DIAG_EXIT:-1}"
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=diag-project')
+    printf 'cid1\n'
+    ;;
+  inspect\ --format\ \{\{.Id\}\}*)
+    printf 'cid1|exited||%s|%s\n' "${DIAG_EXIT:-1}" "${DIAG_OOM:-}"
+    ;;
+  'inspect --format {{.Name}} cid1')
+    printf '/%s\n' "${DIAG_NAME:-mgr-applications}"
+    ;;
+  'logs --tail 200 cid1')
+    printf 'Starting MgrApplication...\nShutting down ExecutorService\nStopping beans in phase\nERROR Application run failed\njava.net.URIcannot be null\n'
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+run_diagnostics() {  # sets run_status, stdout_file, stderr_file
+  set +e
+  (
+    cd "${PROJECT_ROOT}"
+    PATH="${stub_bin}:${PATH}"
+    COMPOSE_PROJECT_NAME=diag-project
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+    dump_failure_diagnostics
+  ) >"${stdout_file}" 2>"${stderr_file}"
+  run_status=$?
+  set -e
+}
+
+DIAG_EXIT=1 run_diagnostics
+[[ ${run_status} -eq 0 ]] || fail 'diagnostics snapshot failed'
+[[ ! -s "${stdout_file}" ]] || fail 'failure diagnostics wrote to stdout'
+grep -q 'ERROR Application run failed' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'error line did not surface above shutdown noise'; }
+grep -q 'Starting MgrApplication' "${stderr_file}" \
+  && fail 'unmatched shutdown noise leaked into the snapshot'
+if grep -q 'Raise Docker memory' "${stderr_file}"; then
+  fail 'memory hint raised without OOM evidence'
+fi
+
+DIAG_EXIT=137 DIAG_OOM=OOMKilled run_diagnostics
+grep -q 'Raise Docker memory' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'OOMKilled evidence did not raise the memory hint'; }
+
+# Case 8: a failure before any container exists explains that, and carries the
+# failing phase/step markers set by the UI layer.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=empty-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\n'
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=empty-project')
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+set +e
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=empty-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  # Production keeps the failure markers in the same process as the dump; set
+  # them after the sources because ui.sh initializes them to empty.
+  UI_FAILED_PHASE='Prepare config'
+  UI_FAILED_STEP='preparing support images'
+  dump_failure_diagnostics
+) >"${stdout_file}" 2>"${stderr_file}"
+run_status=$?
+set -e
+[[ ${run_status} -eq 0 ]] || fail 'empty diagnostics failed'
+[[ ! -s "${stdout_file}" ]] || fail 'empty failure diagnostics wrote to stdout'
+grep -q 'No compose containers were created before the failure.' "${stderr_file}" \
+  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'empty diagnostics did not explain missing containers'; }
+grep -q 'Failed phase: Prepare config' "${stderr_file}" \
+  || fail 'empty diagnostics did not include failed phase'
+grep -q 'Failed step: preparing support images' "${stderr_file}" \
+  || fail 'empty diagnostics did not include failed step'
+
+# Case 9: the health wait is scoped to this compose project. The UNFILTERED
+# `docker ps -q` stub answer includes a foreign project's unhealthy container;
+# if the health loop ever drops the project filter, that container enters the
+# unhealthy set and the wait can never complete.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  ps\ -aq\ --filter\ label=com.docker.compose.project=scoped-project\ --filter\ status=exited\ --filter\ status=dead)
+    ;;
+  ps\ -q\ --filter\ label=com.docker.compose.project=scoped-project)
+    printf 'cid1\ncid2\n'
+    ;;
+  'ps -q')
+    printf 'cid1\ncid2\ncid_foreign\n'
+    ;;
+  inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
+    ;;
+  inspect\ --format\ \{\{if\ .State.Health\}\}*)
+    case "${!#}" in
+      cid_foreign) printf '/foreign-service unhealthy\n' ;;
+      cid1) printf '/svc1 healthy\n' ;;
+      *) printf '/svc2 healthy\n' ;;
+    esac
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+: >"${stdout_file}"
+: >"${stderr_file}"
+if ! (
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=scoped-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  wait_for_all_healthy
+) >"${stdout_file}" 2>"${stderr_file}"; then
+  sed 's/^/stderr: /' "${stderr_file}" >&2
+  fail 'scoped health wait failed although project containers were healthy'
+fi
+[[ ! -s "${stdout_file}" ]] || fail 'scoped health wait wrote to stdout'
+if grep -q 'foreign-service' "${stderr_file}"; then
+  sed 's/^/stderr: /' "${stderr_file}" >&2
+  fail 'health wait consulted a container outside the compose project'
+fi
 
 printf 'ok  health-wait timeout recovers the gateway once and diagnostics name the stale-PID fix\n'
