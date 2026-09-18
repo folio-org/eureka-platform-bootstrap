@@ -102,7 +102,11 @@ assert_stdout_value() {
   }
 }
 
-assert_stdout_value 'resolve_absolute_path' "${PROJECT_ROOT}/start.sh" \
+# resolve_absolute_path resolves symlinks, so the expectation must be resolved
+# the same way (macOS checkouts under /tmp hit /tmp -> /private/tmp).
+expected_start_sh="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' \
+  "${PROJECT_ROOT}/start.sh")"
+assert_stdout_value 'resolve_absolute_path' "${expected_start_sh}" \
   resolve_absolute_path "${PROJECT_ROOT}/start.sh"
 assert_stdout_value 'host_api_gateway_url' 'http://localhost:8000' host_api_gateway_url
 assert_stdout_value 'image_source_for_var fallback' 'descriptor' image_source_for_var MOD_USERS_IMAGE descriptor
@@ -132,17 +136,14 @@ IMAGE_REFRESH_AVAILABLE=false
 : >"${stderr_file}"
 UI_UNICODE=true
 UI_COLOR=false
-ui_cols() { printf '140\n'; }
 print_image_plan >"${stdout_file}" 2>"${stderr_file}"
 [[ ! -s "${stdout_file}" ]] || fail 'print_image_plan leaked data to stdout'
 grep -q 'SRC' "${stderr_file}" || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'image plan did not render source column'; }
 grep -q 'default' "${stderr_file}" || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'image plan did not render default provenance'; }
 grep -q 'mgr-tenant-entitlements' "${stderr_file}" \
-  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'wide image plan still truncated module names'; }
+  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'image plan truncated the longest infra name'; }
 grep -q 'folio-module-sidecar' "${stderr_file}" \
-  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'wide image plan still truncated sidecar name'; }
-awk 'length($0) > 90 { found = 1 } END { exit found ? 0 : 1 }' "${stderr_file}" \
-  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'wide image plan did not expand beyond the legacy 78 columns'; }
+  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'image plan truncated the sidecar name'; }
 
 : >"${stdout_file}"
 : >"${stderr_file}"

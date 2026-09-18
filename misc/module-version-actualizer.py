@@ -101,16 +101,18 @@ def refresh_application_identity(app_descriptor: dict) -> str | None:
   return new_version
 
 
-def update_descriptor(descriptor_path: Path, pre_release: bool) -> list[str]:
+def update_descriptor(descriptor_path: Path, pre_release: bool) -> tuple[list[str], list[str]]:
   with descriptor_path.open("r", encoding="utf-8") as file_handle:
     app_descriptor = json.load(file_handle)
 
   updated_modules: list[str] = []
+  failed_modules: list[str] = []
   for module in app_descriptor.get("modules", []):
     module_name = module.get("name")
     old_version = module.get("version")
     updated_module = fetch_module_data(module_name, pre_release)
     if not updated_module:
+      failed_modules.append(f" - {module_name}: registry lookup failed or returned no data")
       continue
 
     new_version = extract_version(updated_module["id"])
@@ -124,15 +126,22 @@ def update_descriptor(descriptor_path: Path, pre_release: bool) -> list[str]:
       f"{updated_module['id']}"
     )
 
-  new_application_version = refresh_application_identity(app_descriptor)
-  if new_application_version:
-    updated_modules.append(f" - application descriptor -> {new_application_version}")
+  if failed_modules:
+    # Never write a partially refreshed descriptor, and never bump the
+    # application identity on top of unknown module state.
+    return updated_modules, failed_modules
+
+  # A pure re-run with no upstream movement must not mint a new app id.
+  if updated_modules:
+    new_application_version = refresh_application_identity(app_descriptor)
+    if new_application_version:
+      updated_modules.append(f" - application descriptor -> {new_application_version}")
 
   with descriptor_path.open("w", encoding="utf-8", newline="\n") as file_handle:
     json.dump(app_descriptor, file_handle, indent=2, ensure_ascii=False)
     file_handle.write("\n")
 
-  return updated_modules
+  return updated_modules, failed_modules
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -148,7 +157,12 @@ def main(argv: list[str] | None = None) -> int:
     pre_release = prompt_for_pre_release()
   else:
     pre_release = args.pre_release == "true"
-  updated_modules = update_descriptor(descriptor_path, pre_release)
+  updated_modules, failed_modules = update_descriptor(descriptor_path, pre_release)
+
+  if failed_modules:
+    print("Module version refresh failed; descriptor left unchanged:", file=sys.stderr)
+    print("\n".join(failed_modules), file=sys.stderr)
+    return 1
 
   print("Application descriptor module versions updated successfully!")
   if updated_modules:

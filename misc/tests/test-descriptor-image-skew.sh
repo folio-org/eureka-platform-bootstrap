@@ -79,7 +79,6 @@ IMAGE_BUILD_PENDING=false
 IMAGE_REFRESH_AVAILABLE=false
 UI_UNICODE=false
 UI_COLOR=false
-ui_cols() { printf '140\n'; }
 
 # --- Test A: skew IS detected when MOD_USERS_IMAGE tag != descriptor version ---
 # Force a tag guaranteed to differ from whatever the descriptor pins.

@@ -14,6 +14,9 @@
 x-gateway-env: &gateway-env
   APIGW_TYPE: kong
   APIGW_URL: http://api-gateway:8001
+  # Transition alias: mgr images built before the APIGW rename (EUREKA-887) read only
+  # KONG_ADMIN_URL. Remove once warm caches are expected to hold post-rename images.
+  KONG_ADMIN_URL: http://api-gateway:8001
 
 services:
   api-gateway:

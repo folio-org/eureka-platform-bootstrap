@@ -7,7 +7,7 @@ if [ -f "$vaultInitFile" ]; then
   export VAULT_ADDR=http://localhost:8200
 
   unsealKey=$(jq -r '.unseal_keys_b64[0]' "$vaultInitFile")
-  vault operator unseal "$unsealKey" > dev/null
+  vault operator unseal "$unsealKey" > /dev/null
 
   # Reset vault addr and add vault token
   vaultToken=$(jq -r '.root_token' "$vaultInitFile")

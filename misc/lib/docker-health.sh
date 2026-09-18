@@ -4,8 +4,7 @@
 # Health and HTTP-readiness waits used by the bootstrap flow. The container
 # health wait is dynamic (it inspects whatever is actually running), so it adapts
 # automatically to the number of Keycloak nodes or any other optional service.
-#
-# Requires the output helpers from folio-common.sh (step/ok/warn).
+# Also home of the bounded failure-diagnostics snapshot.
 
 [[ -n "${_FOLIO_DOCKER_HEALTH_SOURCED:-}" ]] && return 0
 readonly _FOLIO_DOCKER_HEALTH_SOURCED=1
@@ -16,19 +15,24 @@ HEALTH_TOTAL_COUNT=0
 # Block until every running container that declares a health check reports
 # healthy. Containers without a health check are ignored.
 wait_for_all_healthy() {
-  local i=0 spin_char health_status unhealthy crashed cid inspect_line
-  local unhealthy_count=0
-  local timeout_seconds=300 elapsed=0
+  local health_status unhealthy crashed cid inspect_line
+  local unhealthy_count=0 running_ids
+  local gateway_recovery_done=false
+  # HEALTH_WAIT_TIMEOUT_SECONDS exists so hermetic tests can exercise the
+  # timeout path in seconds; operators always get the 300s default.
+  local timeout_seconds="${HEALTH_WAIT_TIMEOUT_SECONDS:-300}" elapsed=0
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
   local exited_filter=(--filter "label=com.docker.compose.project=${project}" --filter status=exited --filter status=dead)
+  # The health loop must scope to this compose project: an unhealthy container
+  # from an unrelated project on the same daemon must not stall or fail us.
+  local running_filter=(--filter "label=com.docker.compose.project=${project}")
 
   # Baseline of containers already exited before this wait (stale from prior
   # runs) — only crashes that happen during THIS wait should fail it.
   local pre_exited
   pre_exited="$(docker ps -aq "${exited_filter[@]}" 2>/dev/null | sort)"
 
-  ui_timer_start health_wait
-  ui_activity_start 'Verifying container health'
+  ui_step 'Verifying container health'
   while true; do
     # Fail fast if a long-running (healthcheck-declaring) service crashes during
     # this wait. `docker ps -q` below only sees running containers, so a crashed
@@ -42,18 +46,26 @@ wait_for_all_healthy() {
       [[ -n "${inspect_line}" ]] && crashed="${crashed}${inspect_line}"$'\n'
     done < <(comm -13 <(printf '%s\n' "$pre_exited") <(docker ps -aq "${exited_filter[@]}" 2>/dev/null | sort))
     if [[ -n "$crashed" ]]; then
-      ui_activity_finish fail 'Container health failed' "$(ui_timer_read health_wait 2>/dev/null || printf 0)"
+      ui_fail "Container health failed ($(ui_fmt_seconds "${elapsed}"))"
       ui_fail 'container(s) crashed while waiting for health:'
       ui_info "$crashed"
       exit 1
     fi
 
     health_status=''
+    # An empty list from a reachable daemon means "nothing to wait for"; a
+    # failed call means the daemon went away mid-wait — which must fail
+    # loudly, not read as "all healthy".
+    if ! running_ids="$(docker ps -q "${running_filter[@]}" 2>/dev/null)"; then
+      ui_fail "Container health failed ($(ui_fmt_seconds "${elapsed}"))"
+      ui_error 'Lost contact with the Docker daemon while waiting for container health.'
+      exit 1
+    fi
     while IFS= read -r cid || [[ -n "${cid}" ]]; do
       [[ -n "${cid}" ]] || continue
       inspect_line="$(docker inspect --format '{{if .State.Health}}{{.Name}} {{.State.Health.Status}}{{end}}' "${cid}" 2>/dev/null || true)"
       [[ -n "${inspect_line}" ]] && health_status="${health_status}${inspect_line}"$'\n'
-    done < <(docker ps -q 2>/dev/null || true)
+    done <<< "${running_ids}"
     unhealthy="$(printf '%s\n' "$health_status" | grep -Ev ' healthy$' | grep -v '^[[:space:]]*$' || true)"
     if [[ -n "$health_status" ]]; then
       HEALTH_TOTAL_COUNT="$(printf '%s\n' "$health_status" | grep -c '[^[:space:]]' | tr -d '[:space:]')"
@@ -68,20 +80,29 @@ wait_for_all_healthy() {
     HEALTH_READY_COUNT=$((HEALTH_TOTAL_COUNT - unhealthy_count))
 
     if [[ -z "$unhealthy" ]]; then
-      ui_activity_finish ok 'Container health ready' "$(ui_timer_read health_wait)"
+      ui_ok "Container health ready ($(ui_fmt_seconds "${elapsed}"))"
       break
     fi
 
     if [[ $elapsed -ge $timeout_seconds ]]; then
-      ui_activity_finish fail 'Container health timed out' "$(ui_timer_read health_wait 2>/dev/null || printf 0)"
+      ui_fail "Container health timed out ($(ui_fmt_seconds "${elapsed}"))"
       ui_error 'Timed out waiting for containers to become healthy:'
       ui_info "$unhealthy"
+      # The gateway recovery below only helps when the api-gateway is the thing
+      # stuck; give it exactly one bounded retry pass before giving up. The
+      # notice keeps the second wait window visible in flat/piped output,
+      # where the spinner is silent.
+      if [[ "${unhealthy}" == *'api-gateway'* && "${gateway_recovery_done}" == false ]]; then
+        gateway_recovery_done=true
+        recover_api_gateway_if_needed
+        ui_info 'api-gateway recovery attempted — re-verifying container health'
+        elapsed=0
+        continue
+      fi
       exit 1
     fi
 
-    spin_char="$(_ui_spin_frame "$((i++))")"
-    ui_activity_tick "$spin_char" 'Verifying container health' \
-      "${HEALTH_READY_COUNT}/${HEALTH_TOTAL_COUNT}" "$(ui_timer_read health_wait)"
+    ui_progress 'Verifying container health' "${HEALTH_READY_COUNT}/${HEALTH_TOTAL_COUNT}" "${elapsed}"
     sleep 2
     elapsed=$((elapsed + 2))
   done
@@ -89,7 +110,7 @@ wait_for_all_healthy() {
 
 # Recover the api-gateway if its admin API is unavailable.
 # Behaviour is gateway-type aware: Kong supports in-place migration recovery;
-# APISIX recovery is limited to restarting the container via compose.
+# APISIX has no such mode, so its recovery is limited to restarting the container.
 recover_api_gateway_if_needed() {
   local container_state admin_status
 
@@ -121,9 +142,14 @@ recover_api_gateway_if_needed() {
     return 0
   fi
 
-  # Kong-specific: re-run migrations and restart when the process died but the
+  # Kong: re-run migrations and restart when the process died but the
   # container is still running (e.g. nginx PID file left from a prior crash).
-  if [[ "${APIGW_TYPE:-kong}" == "kong" ]]; then
+  # APISIX has no in-place migration recovery: restart the wedged container
+  # instead of returning without doing anything (which would grant a second
+  # wait window that cannot succeed).
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    docker restart api-gateway >/dev/null
+  else
     docker exec api-gateway sh -lc 'rm -f /usr/local/kong/pids/nginx.pid && export KONG_PLUGINS="${KONG_PLUGINS},auth-headers-manager" && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start' >/dev/null
   fi
 }
@@ -135,25 +161,22 @@ wait_for_http_ready() {
   local expected_codes="${3:-200}"
   local timeout_seconds="${4:-120}"
   local elapsed=0 status_code=""
-  local i=0 spin_char
 
-  ui_timer_start http_ready
-  ui_activity_start "Verifying ${description}"
+  ui_step "Verifying ${description}"
   while [[ $elapsed -lt $timeout_seconds ]]; do
     status_code="$(curl -sS -o /dev/null -w '%{http_code}' "${@:5}" "$url" 2>/dev/null || true)"
 
     if [[ " $expected_codes " == *" ${status_code} "* ]]; then
-      ui_activity_finish ok "${description} responding HTTP ${status_code}" "$(ui_timer_read http_ready)"
+      ui_ok "${description} responding HTTP ${status_code} ($(ui_fmt_seconds "${elapsed}"))"
       return 0
     fi
 
-    spin_char="$(_ui_spin_frame "$((i++))")"
-    ui_activity_tick "${spin_char}" "Verifying ${description}" "HTTP ${status_code:-000}" "$(ui_timer_read http_ready)"
+    ui_progress "Verifying ${description}" "HTTP ${status_code:-000}" "${elapsed}"
     sleep 2
     elapsed=$((elapsed + 2))
   done
 
-  ui_activity_finish fail "${description} did not become ready" "$(ui_timer_read http_ready 2>/dev/null || printf 0)"
+  ui_fail "${description} did not become ready ($(ui_fmt_seconds "${elapsed}"))"
   ui_error "Timed out waiting for ${description} at ${url} (last HTTP ${status_code:-000})."
   return 1
 }
@@ -170,48 +193,43 @@ wait_for_gateway_proxy_ready() {
 # is meant to inform a manual re-run, not to replace `docker logs`.
 dump_failure_diagnostics() {
   local project="${COMPOSE_PROJECT_NAME:-folio-platform-minimal}"
-  local broken='' cid name line run_total saw_container=false printed_header=false header_line=''
-  local inspect_line inspect_id inspect_state inspect_health
+  local broken='' cid name line saw_container=false
+  local inspect_line inspect_id inspect_state inspect_health inspect_exit inspect_oom
+  local stale_kong=false oom_evidence=false logs matched_logs
 
-  # Close the failing phase as failed and recap before the snapshot box, so the
-  # operator sees how far the run got. No-ops when called outside a phase.
-  run_total="$(ui_fmt_duration "$(ui_timer_read run_total 2>/dev/null || printf 0)")"
+  # Close the failing phase as failed before the snapshot, so the operator sees
+  # how far the run got. No-ops when called outside a phase.
   ui_phase_finish failed
-  ui_recap "${run_total}"
-
-  ui_box_top "$(ui_glyph warn) diagnostic snapshot" '' warn
-  [[ -n "${UI_FAILED_PHASE:-}" ]] && ui_box_kv 'Failed phase' "${UI_FAILED_PHASE}"
-  [[ -n "${UI_FAILED_STEP:-}" ]] && ui_box_kv 'Failed step' "${UI_FAILED_STEP}"
+  ui_panel '! diagnostic snapshot'
+  [[ -n "${UI_FAILED_PHASE:-}" ]] && ui_panel_kv 'Failed phase' "${UI_FAILED_PHASE}"
+  [[ -n "${UI_FAILED_STEP:-}" ]] && ui_panel_kv 'Failed step' "${UI_FAILED_STEP}"
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -n "${line}" ]] || continue
     line="${line//$'\t'/  }"
     case "${line}" in
-      NAMES[[:space:]]*STATUS*) header_line="${line}"; continue ;;
+      NAMES[[:space:]]*STATUS*) continue ;;
     esac
     saw_container=true
-    if [[ "${printed_header}" != true && -n "${header_line}" ]]; then
-      ui_box_row "${header_line}"
-      printed_header=true
-    fi
-    ui_box_row "${line}"
+    ui_panel_row "${line}"
   done < <(docker ps -a --filter "label=com.docker.compose.project=${project}" \
     --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null || true)
 
-  [[ "${saw_container}" == true ]] || ui_box_row 'No compose containers were created before the failure.'
+  [[ "${saw_container}" == true ]] || ui_panel_row 'No compose containers were created before the failure.'
 
   while IFS= read -r cid || [[ -n "${cid}" ]]; do
     [[ -n "${cid}" ]] || continue
+    # Pipe-delimited: the health field is optional, so positional space-splitting
+    # would misread the ExitCode/OOMKilled fields appended after it.
     inspect_line="$(docker inspect \
-      --format '{{.Id}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+      --format '{{.Id}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.State.ExitCode}}|{{if .State.OOMKilled}}OOMKilled{{end}}' \
       "${cid}" 2>/dev/null || true)"
-    inspect_id="${inspect_line%% *}"
-    inspect_line="${inspect_line#* }"
-    inspect_state="${inspect_line%% *}"
-    inspect_health="${inspect_line#* }"
-    [[ "${inspect_health}" == "${inspect_state}" ]] && inspect_health=''
+    IFS='|' read -r inspect_id inspect_state inspect_health inspect_exit inspect_oom <<<"${inspect_line}"
     if [[ "${inspect_state}" == "exited" || "${inspect_state}" == "dead" || "${inspect_health}" == "unhealthy" ]]; then
       broken="${broken}${inspect_id}"$'\n'
+      if [[ "${inspect_oom}" == "OOMKilled" || "${inspect_exit}" == "137" ]]; then
+        oom_evidence=true
+      fi
     fi
   done < <(docker ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null || true)
 
@@ -219,16 +237,34 @@ dump_failure_diagnostics() {
     while read -r cid; do
       [[ -n "$cid" ]] || continue
       name="$(docker inspect --format '{{.Name}}' "$cid" 2>/dev/null | sed 's#^/##')"
-      ui_box_sep
-      ui_box_row "${name} - last log lines"
-      docker logs --tail 6 "$cid" 2>&1 \
-        | while IFS= read -r line || [[ -n "${line}" ]]; do ui_box_row "  ${line}"; done || true
+      ui_panel_row "${name} - last log lines"
+      # A plain short tail usually captures only graceful-shutdown noise; surface
+      # the error lines from a deeper tail, falling back to the plain tail when
+      # nothing matches so the snapshot never goes empty.
+      logs="$(docker logs --tail 200 "$cid" 2>&1 || true)"
+      # -a: a crashed JVM can emit NUL bytes, which would otherwise make grep
+      # report a useless "Binary file (standard input) matches" line.
+      matched_logs="$(grep -aiE 'ERROR|Exception|Caused by|Error:' <<<"${logs}" | head -n 8 || true)"
+      if [[ -n "${matched_logs}" ]]; then
+        printf '%s\n' "${matched_logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_panel_row "  ${line}"; done
+      elif [[ -n "${logs}" ]]; then
+        tail -n 6 <<<"${logs}" | while IFS= read -r line || [[ -n "${line}" ]]; do ui_panel_row "  ${line}"; done
+      fi
+      if grep -aqi 'already running in /usr/local/kong' <<<"${logs}"; then
+        stale_kong=true
+      fi
     done <<< "$broken"
   fi
-  ui_box_bottom
+  ui_panel_end
 
-  _ui_emit "$(ui_c run "$(ui_glyph arrow)") Re-run ./start.sh - every step is idempotent."
-  [[ "${DOCKER_MEMORY_LOW:-false}" == true ]] \
-    && _ui_emit "  $(ui_c dim 'Raise Docker memory to 12 GB+ in Docker Desktop -> Settings -> Resources, then retry.')"
+  ui_info "$(ui_c run '->') Re-run ./start.sh - every step is idempotent."
+  if [[ "${stale_kong}" == true ]]; then
+    ui_info "api-gateway reports \"Kong is already running\": recover in-place with rm -f /usr/local/kong/pids/nginx.pid && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start (in the api-gateway container), or rerun ./start.sh after ./stop.sh."
+  fi
+  # Only claim a memory problem with OOM evidence; a low preflight reading does
+  # not make every later failure a memory failure.
+  if [[ "${oom_evidence}" == true ]]; then
+    ui_info 'Raise Docker memory to 12 GB+ in Docker Desktop -> Settings -> Resources, then retry.'
+  fi
   return 0
 }

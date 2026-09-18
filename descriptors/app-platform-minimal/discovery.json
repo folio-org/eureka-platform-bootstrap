@@ -19,9 +19,9 @@
       "location": "http://sc-tags:8081"
     },
     {
-      "id": "mod-users-19.6.0",
+      "id": "mod-users-19.6.1",
       "name": "mod-users",
-      "version": "19.6.0",
+      "version": "19.6.1",
       "location": "http://sc-users:8081"
     },
     {
@@ -43,9 +43,9 @@
       "location": "http://sc-login-keycloak:8081"
     },
     {
-      "id": "mod-users-keycloak-4.0.2",
+      "id": "mod-users-keycloak-4.0.3",
       "name": "mod-users-keycloak",
-      "version": "4.0.2",
+      "version": "4.0.3",
       "location": "http://sc-users-keycloak:8081"
     },
     {
@@ -67,9 +67,9 @@
       "location": "http://sc-scheduler:8081"
     },
     {
-      "id": "mod-settings-1.3.2",
+      "id": "mod-settings-1.3.3",
       "name": "mod-settings",
-      "version": "1.3.2",
+      "version": "1.3.3",
       "location": "http://sc-settings:8081"
     }
   ]

@@ -35,6 +35,18 @@ def load_actualizer_module():
   return module
 
 
+def read_env_local_if_present():
+  # docker/.env.local is untracked operator state: absent on a fresh clone.
+  return ENV_LOCAL_PATH.read_text(encoding="utf-8") if ENV_LOCAL_PATH.exists() else None
+
+
+def assert_env_local_unchanged(testcase, original_env_local):
+  if original_env_local is None:
+    testcase.assertFalse(ENV_LOCAL_PATH.exists(), "run.py must not create docker/.env.local")
+  else:
+    testcase.assertEqual(ENV_LOCAL_PATH.read_text(encoding="utf-8"), original_env_local)
+
+
 class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
   def test_module_version_actualizer_help_exposes_app_option(self):
     result = subprocess.run(
@@ -149,7 +161,7 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
 
   def test_services_mode_uses_explicit_descriptor_without_side_effects(self):
     module = load_run_module()
-    original_env_local = ENV_LOCAL_PATH.read_text(encoding="utf-8")
+    original_env_local = read_env_local_if_present()
 
     with tempfile.TemporaryDirectory() as temp_dir_name:
       temp_dir = Path(temp_dir_name)
@@ -171,7 +183,7 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
         stdout.getvalue(),
         "mod-users sc-users mod-login-keycloak sc-login-keycloak mod-users-keycloak sc-users-keycloak\n",
       )
-      self.assertEqual(ENV_LOCAL_PATH.read_text(encoding="utf-8"), original_env_local)
+      assert_env_local_unchanged(self, original_env_local)
       self.assertFalse((temp_dir / "discovery.json").exists())
 
   def test_cleanup_module_runtime_metadata_preserves_standalone_module_overrides(self):
@@ -316,7 +328,7 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
 
   def test_module_env_mode_uses_explicit_descriptor_without_side_effects(self):
     module = load_run_module()
-    original_env_local = ENV_LOCAL_PATH.read_text(encoding="utf-8")
+    original_env_local = read_env_local_if_present()
 
     with tempfile.TemporaryDirectory() as temp_dir_name:
       temp_dir = Path(temp_dir_name)
@@ -339,7 +351,7 @@ class Phase4DescriptorDrivenHelpersTest(unittest.TestCase):
       self.assertEqual(exit_code, 0, stderr.getvalue())
       self.assertIn("export MOD_USERS_IMAGE=folioorg/mod-users:19.5.4\n", stdout.getvalue())
       self.assertIn("export MOD_SCHEDULER_IMAGE=folioci/mod-scheduler:3.0.8-SNAPSHOT.1\n", stdout.getvalue())
-      self.assertEqual(ENV_LOCAL_PATH.read_text(encoding="utf-8"), original_env_local)
+      assert_env_local_unchanged(self, original_env_local)
       self.assertFalse((temp_dir / "discovery.json").exists())
 
 

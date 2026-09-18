@@ -45,6 +45,11 @@ case "$1 $2" in
       custom/mod-users:test)
         exit 1
         ;;
+      folioci/folio-apisix:latest)
+        # Cold cache: the amd64-only upstream manifest is absent locally, so the
+        # image must be enqueued for an arm64 rebuild.
+        exit 1
+        ;;
       *)
         printf 'arm64\n'
         exit 0
@@ -78,6 +83,28 @@ grep -q "custom/mod-users:test" "${output_file}" \
 if grep -q "folioorg/mod-users:19.6.0" "${output_file}"; then
   cat "${output_file}" >&2
   fail "descriptor image was used despite module override"
+fi
+
+: > "${output_file}"
+set +e
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}" \
+    MOD_USERS_IMAGE=custom/mod-users:test \
+    FOLIO_APISIX_IMAGE=folioci/folio-apisix:latest \
+    APIGW_TYPE=apisix \
+    DEBUG=true \
+    bash misc/images-builder/build.sh
+) > "${output_file}" 2>&1
+run_status=$?
+set -e
+
+[[ ${run_status} -eq 0 ]] || { cat "${output_file}" >&2; fail "build.sh failed for FOLIO_APISIX_IMAGE"; }
+grep -q -- '-t folioci/folio-apisix:latest' "${output_file}" \
+  || { cat "${output_file}" >&2; fail "apisix image ref did not reach docker buildx"; }
+if grep -q -- '-t folioci/folio-kong:latest' "${output_file}"; then
+  cat "${output_file}" >&2
+  fail "kong image was built on an apisix run (queue must be gateway-scoped)"
 fi
 
 printf 'ok  build.sh uses effective module image override\n'

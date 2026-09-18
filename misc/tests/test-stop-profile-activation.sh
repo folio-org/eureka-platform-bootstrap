@@ -21,10 +21,15 @@ stop_sh="${PROJECT_ROOT}/stop.sh"
 [[ -f "${stop_sh}" ]] || fail 'stop.sh not found'
 
 # Collect non-comment lines that invoke `docker compose down` or `stop`.
-mapfile -t compose_lines < <(
+# while-read instead of mapfile: mapfile is bash 4+ and a hard error on the
+# macOS stock bash 3.2 this suite must run on.
+compose_lines=()
+while IFS= read -r entry; do
+  compose_lines+=("${entry}")
+done < <(
   grep -nE 'docker[[:space:]]+compose[[:space:]]+(down|stop)' "${stop_sh}" \
-    | grep -vE '^[0-9]+:[[:space:]]*#'
-) || true
+    | grep -vE '^[0-9]+:[[:space:]]*#' || true
+)
 
 [[ ${#compose_lines[@]} -gt 0 ]] || fail 'no docker compose down/stop invocations found in stop.sh'
 

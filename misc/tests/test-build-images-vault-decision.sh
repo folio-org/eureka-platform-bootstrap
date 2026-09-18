@@ -14,7 +14,18 @@ stub_bin="$(mktemp -d)"
 output_file="$(mktemp)"
 trap 'rm -rf "${stub_bin}" "${output_file}"' EXIT
 
-previous_hash="$(<"${PROJECT_ROOT}/misc/vault/.build-context.sha256")"
+# The hash file is generated state (gitignored, absent on a fresh clone): seed
+# a known value for the match/mismatch decision and restore the pre-test state
+# on exit, so the test never depends on — or pollutes — local build state.
+hash_file="${PROJECT_ROOT}/misc/vault/.build-context.sha256"
+hash_backup="$(mktemp)"
+had_hash_file=false
+if [[ -f "${hash_file}" ]]; then
+  had_hash_file=true
+  cp "${hash_file}" "${hash_backup}"
+fi
+printf 'unchanged-context-hash\n' > "${hash_file}"
+trap 'rm -rf "${stub_bin}" "${output_file}"; if [[ "${had_hash_file:-false}" == true ]]; then cp "${hash_backup}" "${hash_file}"; else rm -f "${hash_file}"; rm -f "${hash_backup}"; fi' EXIT
 
 cat >"${stub_bin}/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -63,7 +74,7 @@ grep -q 'stub docker build failed while loading metadata' "${output_file}" \
 set +e
 (
   cd "${PROJECT_ROOT}"
-  PATH="${stub_bin}:${PATH}" STUB_HASH="${previous_hash}" bash misc/build-images.sh
+  PATH="${stub_bin}:${PATH}" STUB_HASH="${SEALED_HASH:-unchanged-context-hash}" bash misc/build-images.sh
 ) >"${output_file}" 2>&1
 status=$?
 set -e

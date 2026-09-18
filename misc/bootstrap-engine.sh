@@ -71,7 +71,7 @@ select_gateway_config() {
 build_arm_images() {
   (
     cd "${PROJECT_ROOT}"
-    REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES}" SIDECAR_MODE="${SIDECAR_MODE}" \
+    REBUILD_BUILT_IMAGES="${REBUILD_BUILT_IMAGES}" SIDECAR_MODE="${SIDECAR_MODE}" APIGW_TYPE="${APIGW_TYPE}" \
       bash misc/images-builder/build.sh
   )
 }
@@ -122,20 +122,6 @@ resolve_app_services() {
   fi
 }
 
-refresh_local_credentials() {
-  # Load in effective-precedence order before writing the generated credentials
-  # file. This keeps a first-run docker/.env.local override from being replaced
-  # by the fallback embedded in local-credentials.sh.
-  load_folio_config credentials
-  load_folio_config local
-  load_folio_config defaults
-
-  (
-    cd "${DOCKER_DIR}"
-    write_default_local_credentials_file
-  )
-}
-
 # The sidecar image (and its tag) is owned entirely by docker/.env(.local) —
 # there is no native-mode tag override. Native mode reuses the same versioned tag
 # (e.g. folioorg/folio-module-sidecar:4.0.1) and rebuilds it locally from the
@@ -154,7 +140,10 @@ capture_initial_image_env_names() {
     esac
   done < <(env)
 
-  INITIAL_IMAGE_ENV_NAMES="$(printf '%s\n' "${names[@]}")"
+  # ${names[@]+...} keeps the expansion safe on bash 3.2, where an empty array
+  # under set -u is an unbound-variable error (operators with no exported
+  # image overrides hit this on a vanilla macOS bash).
+  INITIAL_IMAGE_ENV_NAMES="$(printf '%s\n' ${names[@]+"${names[@]}"})"
 }
 
 initial_env_has_name() {
@@ -201,16 +190,6 @@ local_image_is_arm64() {
   [[ "${arch}" == "arm64" ]]
 }
 
-sidecar_image_is_native_binary() {
-  local image_ref="$1"
-  local entrypoint
-  entrypoint="$(docker image inspect --format '{{json .Config.Entrypoint}}' "${image_ref}" 2>/dev/null || true)"
-  case "${entrypoint}" in
-    *'"./application"'*|*'"/application"'*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 image_plan_action() {
   local name="$1"
   local image_ref="$2"
@@ -220,6 +199,16 @@ image_plan_action() {
       printf 'native arm64 present'
     else
       printf 'will build native'
+    fi
+  elif [[ "${name}" == "folio-module-sidecar" ]] && sidecar_image_is_native_binary "${image_ref}"; then
+    # The configured tag currently holds the native binary from a previous
+    # native run. JVM mode cannot reuse it: the ARM builder rebuilds the JVM
+    # image from source, the amd64 path re-pulls the registry image
+    # (ensure_jvm_sidecar_image).
+    if [[ "${BUILD_ARM_IMAGES}" == "true" ]] && image_ref_is_folio_buildable "${image_ref}"; then
+      printf 'will build arm64'
+    else
+      printf 'will pull or may emulate'
     fi
   elif local_image_is_arm64 "${image_ref}"; then
     printf 'native arm64 present'
@@ -256,12 +245,10 @@ else:
 PY
 }
 
-# Collect one display row into PLAN_ROWS and tally present/build counts. The
-# image plan is a sub-panel of "Prepare config", not a numbered phase, so the
-# rows are rendered together as a box after every row is gathered.
-# Short, fixed-width display label for the ACTION column. Derived from the verbose
-# image_plan_action string, which is kept intact for the build-decision case below
-# (and is asserted verbatim by the capture test).
+# Collect one display row into PLAN_ROWS and tally present/build counts for the
+# "Prepare config" plan panel. image_action_label keeps the ACTION column short;
+# the verbose image_plan_action strings stay intact for the build decision (and
+# are asserted verbatim by the capture test).
 image_action_label() {
   local name="$1"
   local action="$2"
@@ -292,38 +279,12 @@ image_source_label() {
   esac
 }
 
-set_image_plan_column_widths() {
-  local inner fixed remaining
-
-  PLAN_AGE_WIDTH=4
-  PLAN_SOURCE_WIDTH=10
-  PLAN_ACTION_WIDTH=7
-  inner="$(ui_box_inner_width 2>/dev/null || printf 74)"
-  fixed=$((PLAN_AGE_WIDTH + PLAN_SOURCE_WIDTH + PLAN_ACTION_WIDTH + 4))
-  remaining=$((inner - fixed))
-  (( remaining < 36 )) && remaining=36
-
-  PLAN_NAME_WIDTH=$((remaining / 3))
-  (( PLAN_NAME_WIDTH < 23 )) && PLAN_NAME_WIDTH=23
-  (( PLAN_NAME_WIDTH > 28 )) && PLAN_NAME_WIDTH=28
-  PLAN_IMAGE_WIDTH=$((remaining - PLAN_NAME_WIDTH))
-  if (( PLAN_IMAGE_WIDTH < 24 )); then
-    PLAN_IMAGE_WIDTH=24
-    PLAN_NAME_WIDTH=$((remaining - PLAN_IMAGE_WIDTH))
-    (( PLAN_NAME_WIDTH < 12 )) && PLAN_NAME_WIDTH=12
-  fi
-}
-
+# Fixed column layout: NAME 24 · IMAGE 38 · AGE 5 · SRC 11 · ACTION 8.
 print_image_plan_row() {
   local name="$1"
   local image_ref="$2"
   local source="$3"
-  local action age age_display source_display row
-  local name_width="${PLAN_NAME_WIDTH:-18}"
-  local image_width="${PLAN_IMAGE_WIDTH:-26}"
-  local age_width="${PLAN_AGE_WIDTH:-4}"
-  local source_width="${PLAN_SOURCE_WIDTH:-10}"
-  local action_width="${PLAN_ACTION_WIDTH:-7}"
+  local action age row
 
   [[ -n "${image_ref}" ]] || return 0
   action="$(image_plan_action "${name}" "${image_ref}")"
@@ -343,18 +304,12 @@ print_image_plan_row() {
   fi
   PLAN_TOTAL_COUNT=$((PLAN_TOTAL_COUNT + 1))
   [[ "${age}" != '-' ]] && PLAN_PRESENT_COUNT=$((PLAN_PRESENT_COUNT + 1))
-  # Display-only compaction so the columns fit the box (width derived from
-  # ui_box_inner_width / ui_content_width) without truncation: drop image_age's
-  # " ago" suffix ("1h ago" -> "1h", "-" stays "-") and use a short ACTION label.
-  # The underlying age/action values above are unchanged.
-  age_display="${age% ago}"
-  source_display="$(image_source_label "${source}")"
-  printf -v row '%-*s %-*s %-*s %-*s %-*s' \
-    "${name_width}" "$(ui_trunc "${name}" "${name_width}")" \
-    "${image_width}" "$(ui_trunc_left "${image_ref}" "${image_width}")" \
-    "${age_width}" "$(ui_trunc "${age_display}" "${age_width}")" \
-    "${source_width}" "$(ui_trunc "${source_display}" "${source_width}")" \
-    "${action_width}" "$(ui_trunc "$(image_action_label "${name}" "${action}")" "${action_width}")"
+  printf -v row '%-24s %-38s %-5s %-11s %s' \
+    "$(ui_trunc "${name}" 24)" \
+    "$(ui_trunc_tail "${image_ref}" 38)" \
+    "${age% ago}" \
+    "$(image_source_label "${source}")" \
+    "$(image_action_label "${name}" "${action}")"
   PLAN_ROWS+=("${row}")
 }
 
@@ -371,7 +326,6 @@ print_image_plan() {
   SKEW_MODULES=()
   SKEW_DESCRIPTOR_VERSIONS=()
   SKEW_IMAGE_TAGS=()
-  set_image_plan_column_widths
 
   print_image_plan_row 'mgr-applications' "${MGR_APPLICATIONS_IMAGE:-}" "$(image_source_for_var MGR_APPLICATIONS_IMAGE default)"
   print_image_plan_row 'mgr-tenants' "${MGR_TENANTS_IMAGE:-}" "$(image_source_for_var MGR_TENANTS_IMAGE default)"
@@ -408,19 +362,14 @@ print_image_plan() {
     fi
   done < <(jq -r '.modules[] | [.name, .version] | @tsv' "${APP_DESCRIPTOR_PATH}")
 
-  local plan_sep header_row; plan_sep="$(ui_glyph bullet)"
-  printf -v header_row '%-*s %-*s %-*s %-*s %-*s' \
-    "${PLAN_NAME_WIDTH}" 'NAME' \
-    "${PLAN_IMAGE_WIDTH}" 'IMAGE' \
-    "${PLAN_AGE_WIDTH}" 'AGE' \
-    "${PLAN_SOURCE_WIDTH}" 'SRC' \
-    "${PLAN_ACTION_WIDTH}" 'ACTION'
-  ui_box_top 'image plan' "${PLAN_TOTAL_COUNT} images ${plan_sep} ${PLAN_PRESENT_COUNT} present ${plan_sep} ${PLAN_BUILD_COUNT} build"
-  ui_box_row "${header_row}"
+  ui_panel 'image plan' \
+    "${PLAN_TOTAL_COUNT} images ${UI_BULLET} ${PLAN_PRESENT_COUNT} present ${UI_BULLET} ${PLAN_BUILD_COUNT} build"
+  printf -v row '%-24s %-38s %-5s %-11s %s' 'NAME' 'IMAGE' 'AGE' 'SRC' 'ACTION'
+  ui_info "${row}"
   for row in "${PLAN_ROWS[@]}"; do
-    ui_box_row "${row}"
+    ui_info "${row}"
   done
-  ui_box_bottom
+  ui_panel_end
 }
 
 # Arm a refresh-to-latest: rebuild built images instead of reusing local ones, and
@@ -475,15 +424,11 @@ native_sidecar_reusable() {
     && sidecar_image_is_native_binary "${image}"
 }
 
-# In native mode the :native tag selected above does not exist until we build it:
-# compile folio-module-sidecar to a GraalVM native binary and package it into a
-# lightweight image (misc/build-native-sidecar.sh). This is idempotent — if the
-# image is already present locally we reuse it, mirroring the build-images.sh/vault
-# skip pattern — unless REBUILD_NATIVE_SIDECAR forces a fresh build. The build is
-# long (5-10 min) and chatty; build-native-sidecar.sh folds its mvn/docker output
-# under a spinner (ui_run), showing the last lines only on failure. A native build
-# failure is fatal: the selected :native image would be missing, so we
-# abort with guidance instead of letting Compose fail on a non-existent image.
+# In native mode the sidecar image does not exist until we build it:
+# misc/build-native-sidecar.sh compiles a GraalVM native binary and packages it
+# (idempotent — reused when present, unless --rebuild-native-sidecar forces a
+# fresh build; its chatty output is folded with the tail shown on failure). A
+# build failure is fatal: Compose would otherwise fail on a missing image.
 ensure_native_sidecar_image() {
   [[ "${SIDECAR_MODE}" == "native" ]] || return 0
 
@@ -500,14 +445,55 @@ ensure_native_sidecar_image() {
   fi
 }
 
-# A native (GraalVM) sidecar is a different runtime from the JVM sidecar, so its
-# resource envelope differs: it ignores JAVA_OPTIONS entirely (the ZGC/heap/jdwp
-# flags are inert) and its resident footprint is a fraction of the JVM's. In
-# native mode we therefore blank SIDECAR_JAVA_OPTIONS and lower the per-sidecar
-# memory limit. SIDECAR_MODE is the single source for this — we derive from it
-# rather than adding a second switch. An operator value (shell or
-# docker/.env(.local), already sourced by load_folio_config) always wins. JVM mode
-# is untouched: the compose defaults apply.
+# The mirror image of ensure_native_sidecar_image for the default JVM mode: a
+# previous native run left the GraalVM binary under the configured tag, and the
+# JVM run must not silently keep running it. Two restore paths exist: on amd64
+# (no ARM source builder) the registry image is the only JVM source, so the tag
+# is restored with a one-time pull; on ARM the builder rebuilds the JVM image
+# from source (the published folioci images are amd64-only; pulling there
+# would reintroduce emulation). A tag with no JVM build path at all (e.g. a
+# ':native' tag, which names no git ref and has no registry JVM build) is a
+# mode/tag conflict and halts with both exits.
+ensure_jvm_sidecar_image() {
+  [[ "${SIDECAR_MODE}" != "native" ]] || return 0
+
+  local image="${FOLIO_MODULE_SIDECAR_IMAGE:-}"
+  [[ -n "${image}" ]] || return 0
+  sidecar_image_is_native_binary "${image}" || return 0
+
+  if [[ "${BUILD_ARM_IMAGES}" != "true" ]]; then
+    ui_step "Local ${image} is the native sidecar; restoring the JVM image"
+    if ! docker pull "${image}" >/dev/null 2>&1; then
+      error "Could not restore a JVM ${image} from its registry (offline, or the tag publishes no JVM build). Compose would keep running the native binary. Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+    fi
+    # The pull happened specifically to replace the native binary; prove it did.
+    # A registry tag that publishes only the native image passes the pull and
+    # would still run the GraalVM binary under Compose.
+    if sidecar_image_is_native_binary "${image}"; then
+      error "Pulled ${image}, but the tag still holds the native sidecar binary (the registry tag has no JVM build). Compose would keep running the native binary. Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+    fi
+    ui_ok "JVM sidecar image restored: ${image}"
+    return 0
+  fi
+
+  if ! image_ref_is_folio_buildable "${image}" || ! sidecar_tag_is_jvm_buildable "${image}"; then
+    error "FOLIO_MODULE_SIDECAR_IMAGE (${image}) holds the native sidecar, and JVM mode has no way to produce a JVM image under this tag (no derivable source ref, no registry JVM build). Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+  fi
+}
+
+# True when the generic ARM builder can derive a git ref for this image tag —
+# its branch rule: *SNAPSHOT*/latest build from master, a semver tag builds
+# from its upstream vX.Y.Z; anything else (e.g. ':native') has no derivable
+# ref and cannot produce a build under that tag.
+sidecar_tag_is_jvm_buildable() {
+  local tag="${1##*:}"
+  [[ "${tag}" == *"SNAPSHOT"* || "${tag}" == "latest" || "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
+}
+
+# A native sidecar ignores JAVA_OPTIONS and needs far less memory than the JVM
+# sidecar, so native mode blanks SIDECAR_JAVA_OPTIONS and lowers the memory
+# limit. SIDECAR_MODE is the single switch; an operator value (shell or
+# docker/.env(.local)) always wins, and JVM mode keeps the compose defaults.
 NATIVE_SIDECAR_MEMORY_LIMIT='128m'
 
 select_sidecar_resources() {
@@ -552,13 +538,22 @@ ensure_host_entries() {
   done
 }
 
-# Surface host-readiness problems before any long-running step, so the operator
-# sees a clear cause up front instead of a confusing failure mid-bootstrap. Both
-# checks are warn-only on purpose: on Linux `docker info` MemTotal is host RAM
-# (not an allocatable limit), and a busy port is often just a warm re-run of this
-# same stack — neither should hard-block the supported flow.
+# Surface host-readiness problems before any long-running step. An unreachable
+# daemon is a hard fail (every later check would misdiagnose); memory and port
+# checks are warn-only: Linux MemTotal is host RAM, not an allocatable limit,
+# and a busy port is often just a warm re-run of this same stack.
 MIN_DOCKER_MEMORY_GB="${MIN_DOCKER_MEMORY_GB:-12}"
 HOST_REQUIRED_PORTS="${HOST_REQUIRED_PORTS:-8000 8080}"
+
+# Abort when the Docker daemon itself is unreachable; there is nothing to
+# diagnose past this point.
+check_docker_daemon() {
+  docker info --format '{{.ServerVersion}}' >/dev/null 2>&1 || {
+    ui_error 'Docker daemon is not reachable (is Docker Desktop / dockerd running?)'
+    ui_info '  Start Docker, then rerun ./start.sh.'
+    exit 1
+  }
+}
 
 # Warn when Docker has less memory than the minimal platform realistically needs.
 # A non-numeric/empty reading (old daemon, permission, format change) is skipped
@@ -566,12 +561,9 @@ HOST_REQUIRED_PORTS="${HOST_REQUIRED_PORTS:-8000 8080}"
 check_docker_memory() {
   local mem_bytes min_bytes mem_gb
   mem_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || true)"
-  [[ "${mem_bytes}" =~ ^[0-9]+$ ]] || return 0
+  [[ "${mem_bytes}" =~ ^[1-9][0-9]*$ ]] || return 0
   min_bytes=$(( MIN_DOCKER_MEMORY_GB * 1024 * 1024 * 1024 ))
   (( mem_bytes >= min_bytes )) && return 0
-  # Record the low-memory state so a later failure snapshot can surface the hint
-  # without re-running `docker info`.
-  export DOCKER_MEMORY_LOW=true
   mem_gb=$(( mem_bytes / 1024 / 1024 / 1024 ))
   ui_warn "Docker reports ~${mem_gb}GB memory; ${MIN_DOCKER_MEMORY_GB}GB+ recommended for this stack."
   ui_warn 'Raise it in Docker Desktop -> Settings -> Resources (modules may OOM or thrash otherwise).'
@@ -606,6 +598,7 @@ check_host_ports() {
 }
 
 preflight_host() {
+  check_docker_daemon
   check_docker_memory
   check_host_ports
 }
@@ -645,27 +638,23 @@ create_default_admin_user() {
 # choices are resolved later (the interactive prompts run inside the Configure phase),
 # so they are surfaced by print_run_mode rather than crammed into this banner.
 print_run_banner() {
-  local app_label arch banner_meta version sep
+  local app_label arch banner_meta version
   app_label="$(basename "$(dirname "${APP_DESCRIPTOR_PATH}")")"
   arch="$(uname -m)"
-  sep="$(ui_glyph bullet)"
-  banner_meta="${app_label} ${sep} ${arch}"
+  banner_meta="${app_label} ${UI_BULLET} ${arch}"
   version="$(git -C "${PROJECT_ROOT}" describe --tags 2>/dev/null || true)"
-  [[ -n "${version}" ]] && banner_meta="${version} ${sep} ${banner_meta}"
+  [[ -n "${version}" ]] && banner_meta="${version} ${UI_BULLET} ${banner_meta}"
 
   ui_title 'eureka platform bootstrap'
-  ui_note "  ${banner_meta}"
+  ui_info "${banner_meta}"
 }
 
 # One dim line summarizing the resolved run choices, printed inside the Configure
-# phase once the prompts have settled: the sidecar runtime and whether module
-# versions were actualized. It carries the sidecar token that used to live in the
-# banner (the banner now prints before the prompts, so it cannot show a chosen mode).
+# phase once the prompts have settled.
 print_run_mode() {
-  local sep modules
-  sep="$(ui_glyph bullet)"
+  local modules
   [[ "${ACTUALIZE_MODULES}" == 'true' ]] && modules='actualized' || modules='pinned'
-  ui_info "$(ui_c dim "${sep}") sidecar ${SIDECAR_MODE} $(ui_c dim "${sep}") modules ${modules} $(ui_c dim "${sep}") gateway ${APIGW_TYPE:-kong}"
+  ui_info "sidecar ${SIDECAR_MODE} ${UI_BULLET} modules ${modules} ${UI_BULLET} gateway ${APIGW_TYPE:-kong}"
 }
 
 print_final_summary() {
@@ -674,27 +663,46 @@ print_final_summary() {
   local smoke_status="${3:-not run}"
   local final_next_step="${4:-}"
 
-  ui_box_top "Bootstrap complete - ${final_status}" "total ${run_total}" done
-  ui_box_kv 'API gateway' "$(host_api_gateway_url)"
-  ui_box_kv 'Keycloak' 'http://localhost:8080'
-  ui_box_kv 'Tenant' 'diku'
-  ui_box_kv 'User' 'folio / folio'
-  ui_box_kv 'Smoke check' "${smoke_status}"
-  [[ -n "${final_next_step}" ]] && ui_box_kv_wrapped 'Next step' "${final_next_step}"
-  ui_box_bottom
+  ui_panel "Bootstrap complete - ${final_status}" "total ${run_total}"
+  ui_panel_kv 'API gateway' "$(host_api_gateway_url)"
+  ui_panel_kv 'Keycloak' 'http://localhost:8080'
+  ui_panel_kv 'Tenant' 'diku'
+  ui_panel_kv 'User' 'folio / folio'
+  ui_panel_kv 'Smoke check' "${smoke_status}"
+  [[ -n "${final_next_step}" ]] && ui_panel_kv 'Next step' "${final_next_step}"
+  ui_panel_end
 }
 
-# Re-reads the descriptor, regenerates discovery.json, cleans the managed
-# .env.local block, re-resolves services, and force-re-exports descriptor
-# module config (unset first so the "already set" guard in
-# export_descriptor_module_config does not skip the new values). Called once
-# during Prepare config and again after a skew-driven actualize.
+# The actualizer's result summary goes to stdout, which ui_run folds away on
+# success — capture it in the helper and replay it after the step commits
+# (same pattern as the credentials creation notice above).
+run_module_version_actualizer() {
+  ACTUALIZER_SUMMARY_FILE="$(mktemp)"
+  if ! python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" \
+      --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}" \
+      >"${ACTUALIZER_SUMMARY_FILE}"; then
+    rm -f "${ACTUALIZER_SUMMARY_FILE}"
+    ACTUALIZER_SUMMARY_FILE=''
+    return 1
+  fi
+}
+
+print_actualizer_summary() {
+  local line
+  [[ -s "${ACTUALIZER_SUMMARY_FILE:-}" ]] || return 0
+  while IFS= read -r line; do
+    if [[ -n "${line}" ]]; then ui_info "${line}"; fi
+  done < "${ACTUALIZER_SUMMARY_FILE}"
+  rm -f "${ACTUALIZER_SUMMARY_FILE}"
+  ACTUALIZER_SUMMARY_FILE=''
+}
+
 sync_descriptor_runtime() {
   local line assignment name
 
-  if [[ "${ACTUALIZE_MODULES}" == 'true' ]]; then
-    ui_run 'actualizing module versions' \
-      python3 "${PROJECT_ROOT}/misc/module-version-actualizer.py" --app "${APP_DESCRIPTOR_PATH}" --pre-release "${PRE_RELEASE_MODE}"
+  if [[ "${ACTUALIZE_MODULES}" == "true" ]]; then
+    ui_run 'actualizing module versions' run_module_version_actualizer
+    print_actualizer_summary
   else
     ui_debug 'Skipping module version actualization.'
   fi
@@ -706,12 +714,22 @@ sync_descriptor_runtime() {
 
   # Force re-export: unset descriptor-derived MOD_*_IMAGE and MOD_*_VERSION so
   # export_descriptor_module_config's "already set" guard does not skip them.
+  # Operator-sourced names (pre-run shell env, .env.local(.credentials)) are
+  # preserved — unsetting them silently discarded documented overrides and made
+  # the skew guard's recovery text untruthful.
   while IFS= read -r line; do
     [[ "${line}" == export\ *=* ]] || continue
     assignment="${line#export }"
     name="${assignment%%=*}"
     case "${name}" in
-      *_IMAGE|MOD_*_VERSION) unset "${name}" ;;
+      *_IMAGE|MOD_*_VERSION)
+        if initial_env_has_name "${name}" \
+          || env_file_has_name "${DOCKER_DIR}/.env.local.credentials" "${name}" \
+          || env_file_has_name "${DOCKER_DIR}/.env.local" "${name}"; then
+          continue
+        fi
+        unset "${name}"
+        ;;
     esac
   done < <(python3 "${PROJECT_ROOT}/misc/docker-module-updater/run.py" --app "${APP_DESCRIPTOR_PATH}" --module-env)
 
@@ -748,7 +766,7 @@ check_and_handle_descriptor_image_skew() {
         ui_ok "Descriptor and image versions aligned after actualize."
         return 0
       fi
-      ui_warn "Skew persists for ${count} module(s) after actualize — a standalone override in docker/.env.local likely survived cleanup."
+      ui_warn "Skew persists for ${count} module(s) after actualize — a standalone override in the shell environment or docker/.env.local likely survived cleanup."
     fi
   fi
 
@@ -760,7 +778,7 @@ check_and_handle_descriptor_image_skew() {
   done
   ui_info "  Recovery options:"
   ui_info "    1. Run ./start.sh --actualize [--pre-release] to refresh descriptor versions from the registry."
-  ui_info "    2. Remove or align the matching MOD_*_IMAGE override in docker/.env.local."
+  ui_info "    2. Remove or align the matching MOD_*_IMAGE / MOD_*_VERSION override in the shell environment or docker/.env.local."
   ui_info "  Note: a plain ./start.sh --yes re-run will NOT recover from this — the override persists."
   exit 1
 }
@@ -778,15 +796,22 @@ run_bootstrap_flow() {
   # Recovery is a plain re-run of ./start.sh — every step is idempotent.
   trap 'rc=$?; [[ $rc -ne 0 ]] && dump_failure_diagnostics || true; exit $rc' EXIT
 
-  # Set COMPOSE_FILE, GATEWAY_PROFILE, APIGW_URL, and APIGW_API_KEY based on
-  # APIGW_TYPE before the first docker compose call.
+  # Set COMPOSE_FILE and GATEWAY_PROFILE from APIGW_TYPE before the first
+  # docker compose call.
   select_gateway_config
 
-  # run_total is started in start.sh's main() as phase 01 (Configure) opens, so the
-  # completion box's total spans every numbered phase; here we continue into the next.
-  ui_phase 'Prepare config'
+  # Remember which image/version variables are already in the shell BEFORE any
+  # repository config is loaded: only those are real operator overrides. Values
+  # introduced by docker/.env(.local)(.credentials) below must be reported as
+  # defaults/overrides, never as "shell override".
   capture_initial_image_env_names
-  ui_run 'refreshing local credentials and defaults' refresh_local_credentials
+
+  # Bring docker/.env(.local)(.credentials) values into this shell (set -a
+  # exports them): recover_api_gateway_if_needed and the route guard need
+  # APISIX_ADMIN_KEY, and compose inherits the interpolated defaults.
+  load_folio_config
+
+  ui_phase 'Prepare config'
   select_sidecar_resources
 
   ui_run 'preparing support images' bash "${PROJECT_ROOT}/misc/build-images.sh"
@@ -795,6 +820,7 @@ run_bootstrap_flow() {
   check_and_handle_descriptor_image_skew
   prompt_image_refresh
   ensure_native_sidecar_image
+  ensure_jvm_sidecar_image
 
   if [[ "${BUILD_ARM_IMAGES}" == 'true' ]]; then
     if [[ "${IMAGE_BUILD_PENDING}" == 'true' ]]; then
@@ -846,7 +872,7 @@ run_bootstrap_flow() {
   ui_debug "Application services: ${APP_SERVICES[*]}"
   docker compose up -d "${APP_SERVICES[@]}"
   wait_for_all_healthy
-  wait_for_http_ready 'http://localhost:8000/capabilities?limit=1' 'capabilities route' '200 401 403 404 405'
+  wait_for_http_ready 'http://localhost:8000/capabilities?limit=1' 'gateway capabilities route alive' '200 401 403 404 405'
   ui_ok "Application services deployed for ${APP_NAME}."
 
   ui_phase 'Finalize tenant setup'
@@ -867,10 +893,8 @@ run_bootstrap_flow() {
   fi
 
   local run_total
-  run_total="$(ui_fmt_duration "$(ui_timer_read run_total 2>/dev/null || printf 0)")"
+  run_total="$(ui_fmt_seconds "$(( SECONDS - ${BOOTSTRAP_START:-${SECONDS}} ))")"
   ui_phase_finish done
-  ui_recap "${run_total}"
-
   print_final_summary "${final_status}" "${run_total}" "${smoke_status}" "${final_next_step}"
   return 0
 }
