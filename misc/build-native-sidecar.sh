@@ -15,9 +15,10 @@ ui_title "Building Native Sidecar Image"
 
 # Derive the git ref to build from the image tag — the single source of truth.
 # A semver tag (4.0.1) maps to the upstream git tag v4.0.1; anything else
-# (native/latest/*-SNAPSHOT/no tag) falls back to master. We verify the tag
-# exists upstream before using it so a typo degrades to a visible master build
-# instead of a hard clone failure.
+# (native/latest/*-SNAPSHOT/no tag) builds master, the documented moving ref.
+# An explicit semver whose upstream git tag does not exist is a hard error:
+# building master and labelling the result with the requested version would
+# violate the tag-as-source-of-truth contract.
 derive_sidecar_ref() {
     local image="$1"
     local tag="${image##*:}"
@@ -32,7 +33,9 @@ derive_sidecar_ref() {
             printf 'v%s' "$tag"
             return 0
         fi
-        ui_warn "git tag v${tag} not found upstream; falling back to master"
+        ui_error "Image tag ${tag} requires upstream git tag v${tag}, which does not exist;"
+        ui_error "refusing to build master and label it ${tag}. Fix FOLIO_MODULE_SIDECAR_IMAGE."
+        exit 1
     fi
     printf 'master'
 }

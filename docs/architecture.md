@@ -84,8 +84,12 @@ gateway's) through `misc/images-builder/build.sh`, which rebuilds them natively
 for arm64; already-native images are skipped, so warm re-runs build nothing.
 The native sidecar mode (`--native-sidecar`) reuses the sidecar's configured
 tag and builds a GraalVM native image under it via
-`misc/build-native-sidecar.sh`. The image plan table printed during
-"Prepare config" shows each image's provenance and the decided action.
+`misc/build-native-sidecar.sh`. Both sidecar runtimes share that one tag, so
+architecture alone cannot prove reuse: the entrypoint (`./application` vs
+`./run-java.sh`) is the discriminator, and a mode switch rebuilds the image
+(ARM) or re-pulls it from the registry (x86_64) so the requested runtime is
+what runs. The image plan table printed during "Prepare config" shows each
+image's provenance and the decided action.
 
 ## Failure model
 

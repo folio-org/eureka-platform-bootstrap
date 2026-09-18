@@ -75,6 +75,13 @@ need low-level Docker access can work directly from `docker/` with native
 ./stop.sh --yes   # non-interactive: remove containers, keep volumes
 ```
 
+Clearing volumes deletes **every data volume belonging to this Compose project**
+(PostgreSQL, Kafka, Vault — and APISIX's `etcd-data` if it exists), discovered
+by the Compose project label rather than by name. It is gateway-independent:
+it works even when the previous run used the other gateway, and even when the
+containers are already gone. Volumes that do not belong to this project are
+never touched.
+
 ## Keycloak topology
 
 Keycloak runs as a **single node** by default. To scale the cluster, uncomment the
@@ -137,7 +144,7 @@ Override the gateway image in `docker/.env` or via shell env:
 ## Configuration model
 
 - `docker/.env` — committed defaults (deterministic local development credentials)
-- `docker/.env.local` — local non-secret overrides (image tags, generated versions)
+- `docker/.env.local` — local non-secret overrides (e.g. image tags)
 - `docker/.env.local.credentials` — the runtime Vault root token, plus any
   operator-added secrets (never committed)
 
@@ -147,9 +154,16 @@ Service-level environment variables are defined inline in the Compose files.
 `start.sh` takes them from the shell environment, its flags (`--apisix`,
 `--native-sidecar`), or the interactive prompts before it loads any config
 files, so a value in `docker/.env.local` never influences a `start.sh` run.
-`./stop.sh` has no gateway flag — it reads `APIGW_TYPE` from the loaded
-config (shell env or `docker/.env.local`) to pick the gateway compose file
-for teardown.
+The gateway choice is therefore session-local. `./stop.sh` has no gateway flag
+either — it reads `APIGW_TYPE` the same way to pick the gateway Compose file
+for container teardown (defaulting to Kong), but its clear-volumes action is
+label-scoped and removes every project volume whichever gateway was active.
+
+Sidecar runtime mode is a real switch, not a preference: `--native-sidecar`
+rebuilds the configured sidecar tag as a GraalVM native image, and a later
+plain `./start.sh` restores the JVM image under that same tag (rebuilds it on
+ARM, re-pulls it from the registry on x86_64), so the mode you request is the
+runtime you get.
 
 ## Validation
 

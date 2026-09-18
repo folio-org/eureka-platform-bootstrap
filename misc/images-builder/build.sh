@@ -40,16 +40,49 @@ mkdir -p "${LOG_DIR}" "${STATUS_DIR}"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 cd "${WORK_DIR}"
 
+image_name_from_ref() {
+    local image_ref="$1"
+    local image_name
+
+    image_ref="${image_ref%%@*}"
+    image_name="${image_ref##*/}"
+    image_name="${image_name%%:*}"
+    printf '%s\n' "${image_name}"
+}
+
+image_tag_from_ref() {
+    local image_ref="$1"
+    local image_name
+
+    image_ref="${image_ref%%@*}"
+    image_name="${image_ref##*/}"
+    if [[ "${image_name}" == *:* ]]; then
+        printf '%s\n' "${image_name#*:}"
+    else
+        printf 'latest\n'
+    fi
+}
+
 # True when a locally-present image is already built for arm64, so we can skip
 # rebuilding it. Returns non-zero when the image is missing or a different arch.
 # This makes the whole build idempotent: a warm re-run rebuilds nothing.
 # REBUILD_BUILT_IMAGES forces a full rebuild (the refresh-to-latest path): nothing
 # counts as native, so the base JRE and every module are rebuilt from source.
+# The folio-module-sidecar tag is shared by both sidecar runtimes: in JVM mode an
+# arm64 image under that tag is reusable only when it is NOT the native binary
+# (a previous native run replaces the tag contents), so a same-tag native image
+# is rebuilt here instead of skipped — that is what makes native → JVM real.
 image_is_native() {
   local image_ref="$1" arch
   [[ "${REBUILD_BUILT_IMAGES:-false}" == "true" ]] && return 1
   arch="$(docker image inspect --format '{{.Architecture}}' "$image_ref" 2>/dev/null || true)"
-  [[ "$arch" == "arm64" ]]
+  [[ "$arch" == "arm64" ]] || return 1
+  if [[ "${SIDECAR_MODE:-jvm}" != "native" ]] \
+     && [[ "$(image_name_from_ref "$image_ref")" == "folio-module-sidecar" ]] \
+     && sidecar_image_is_native_binary "$image_ref"; then
+    return 1
+  fi
+  return 0
 }
 
 # Check for required commands
@@ -143,29 +176,6 @@ enqueue_module() {
     QUEUE_SKIP_MAVEN+=("$skip_maven")
     QUEUE_TAGS+=("$tag")
     QUEUE_COUNT=$((QUEUE_COUNT + 1))
-}
-
-image_name_from_ref() {
-    local image_ref="$1"
-    local image_name
-
-    image_ref="${image_ref%%@*}"
-    image_name="${image_ref##*/}"
-    image_name="${image_name%%:*}"
-    printf '%s\n' "${image_name}"
-}
-
-image_tag_from_ref() {
-    local image_ref="$1"
-    local image_name
-
-    image_ref="${image_ref%%@*}"
-    image_name="${image_ref##*/}"
-    if [[ "${image_name}" == *:* ]]; then
-        printf '%s\n' "${image_name#*:}"
-    else
-        printf 'latest\n'
-    fi
 }
 
 enqueue_effective_image_ref() {
@@ -312,7 +322,6 @@ dispatch_builds() {
             reported[idx]=1
             done_count=$((done_count + 1))
             read -r state elapsed tag < "${STATUS_DIR}/${QUEUE_NAMES[$idx]}"
-            ui_progress_end
             if [[ "${state}" == "ok" ]]; then
                 ui_ok "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} -> ${tag} ($(ui_fmt_seconds "${elapsed}"))"
             else
@@ -336,7 +345,6 @@ dispatch_builds() {
                 fi
                 reported[idx]=1
                 done_count=$((done_count + 1))
-                ui_progress_end
                 ui_fail "${QUEUE_NAMES[$idx]}:${QUEUE_VERSIONS[$idx]} build failed (no status)"
                 FAILED_MODULES+=("${QUEUE_NAMES[$idx]}")
                 FAILED_COUNT=$((FAILED_COUNT + 1))

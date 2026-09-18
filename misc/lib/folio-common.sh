@@ -134,6 +134,26 @@ _source_env_file_preserving_environment() {
 }
 
 ################################################################################
+# Docker image inspection
+################################################################################
+
+# True when the locally-present image is the GraalVM native sidecar binary.
+# JVM and native sidecars share the configured tag, so the entrypoint is the
+# only discriminator between the two runtimes: the upstream JVM image runs
+# ./run-java.sh, the native image runs ./application. Missing image → false.
+# Shared by the bootstrap (sidecar mode decisions) and the ARM image builder
+# (same-tag reuse check), so both agree on what "native" means.
+sidecar_image_is_native_binary() {
+  local image_ref="$1"
+  local entrypoint
+  entrypoint="$(docker image inspect --format '{{json .Config.Entrypoint}}' "${image_ref}" 2>/dev/null || true)"
+  case "${entrypoint}" in
+    *'"./application"'*|*'"/application"'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+################################################################################
 # Dependency checking
 ################################################################################
 

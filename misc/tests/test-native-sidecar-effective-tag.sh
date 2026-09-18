@@ -115,6 +115,31 @@ run_build "custom/folio-module-sidecar:native"
 grep -q -- "git clone .*--branch master" "${output_file}" \
   || { cat "${output_file}" >&2; fail "non-semver tag did not fall back to master"; }
 
+# An explicit semver whose upstream git tag does not exist must FAIL clearly,
+# never build master and label the result with the requested version (the
+# tag is the single source of truth for what gets built).
+: > "${docker_log}"
+set +e
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}" \
+    FOLIO_MODULE_SIDECAR_IMAGE="custom/folio-module-sidecar:9.9.9" \
+    bash misc/build-native-sidecar.sh
+) > "${output_file}" 2>&1
+missing_status=$?
+set -e
+[[ ${missing_status} -ne 0 ]] \
+  || { cat "${output_file}" >&2; fail "missing semver tag unexpectedly succeeded"; }
+grep -q 'requires upstream git tag v9.9.9' "${output_file}" \
+  || { cat "${output_file}" >&2; fail "missing semver tag: no clear failure naming the tag"; }
+if grep -q -- '--branch master' "${output_file}"; then
+  cat "${output_file}" >&2
+  fail "missing semver tag silently built master"
+fi
+if grep -q -- '-t custom/folio-module-sidecar:9.9.9' "${docker_log}"; then
+  fail "missing semver tag produced an image falsely labelled 9.9.9"
+fi
+
 run_build_expect_failure "custom/folio-module-sidecar:4.0.1"
 grep -q -- "stub maven failure" "${output_file}" \
   || { cat "${output_file}" >&2; fail "native build failure did not surface the real mvn error (bounded tail)"; }

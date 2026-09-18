@@ -46,7 +46,16 @@ ui_init() {
   esac
 }
 
+# Committing a line first erases any live progress line, so a polling loop can
+# never leave spinner fragments glued in front of a final status. Color-only and
+# a no-op in piped output, exactly like the progress line itself.
+_ui_clear_progress() {
+  [[ "${UI_COLOR}" == true ]] || return 0
+  printf '\r\033[K' >&2
+}
+
 _ui_emit() {
+  _ui_clear_progress
   printf '%s\n' "$1" >&2
   return 0
 }
@@ -80,6 +89,7 @@ ui_fmt_seconds() {
 }
 
 ui_title() {
+  _ui_clear_progress
   printf '\n' >&2
   _ui_emit "$(ui_c run "${UI_BULLET}") $(ui_c strong "$*")"
 }
@@ -126,12 +136,14 @@ ui_prompt() {
 
 _UI_PHASE_NUM=0
 _UI_PHASE_START=0
+_UI_PHASE_OPEN=false
 
 # Open the next numbered phase (closing any previous one).
 ui_phase() {
   ui_phase_finish done
   _UI_PHASE_NUM=$(( _UI_PHASE_NUM + 1 ))
   _UI_PHASE_START=${SECONDS}
+  _UI_PHASE_OPEN=true
   UI_CURRENT_PHASE="$1"
   UI_CURRENT_STEP=''
   printf '\n' >&2
@@ -139,8 +151,12 @@ ui_phase() {
 }
 
 # Close the open phase with its measured duration, or the failure marker.
+# Idempotent: with no phase open (nothing opened yet, or this one already
+# closed) it is a no-op, so a stray second finish can never print a duplicate
+# close line.
 ui_phase_finish() {
-  [[ "${_UI_PHASE_NUM}" -gt 0 ]] || return 0
+  [[ "${_UI_PHASE_OPEN}" == true ]] || return 0
+  _UI_PHASE_OPEN=false
   local elapsed
   elapsed=$(( SECONDS - _UI_PHASE_START ))
   if [[ "${1:-done}" == "failed" ]]; then
@@ -175,8 +191,7 @@ ui_progress() {
 }
 
 ui_progress_end() {
-  [[ "${UI_COLOR}" == true ]] || return 0
-  printf '\r\033[K' >&2
+  _ui_clear_progress
 }
 
 ################################################################################
@@ -209,6 +224,7 @@ ui_trunc_tail() {
 
 ui_panel() {
   local title="$1" right="${2:-}"
+  _ui_clear_progress
   printf '\n' >&2
   if [[ -n "${right}" ]]; then
     _ui_emit "  $(ui_c strong "${title}")  $(ui_c dim "${right}")"

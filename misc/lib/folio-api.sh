@@ -396,7 +396,6 @@ wait_for_capabilities() {
       fi
       sleep 2
       cap_wait=$((cap_wait + 2))
-      ui_progress_end
       tenant_access_token="$(obtain_tenant_access_token diku)"
       continue
     fi

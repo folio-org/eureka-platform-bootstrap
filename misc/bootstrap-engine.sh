@@ -190,16 +190,6 @@ local_image_is_arm64() {
   [[ "${arch}" == "arm64" ]]
 }
 
-sidecar_image_is_native_binary() {
-  local image_ref="$1"
-  local entrypoint
-  entrypoint="$(docker image inspect --format '{{json .Config.Entrypoint}}' "${image_ref}" 2>/dev/null || true)"
-  case "${entrypoint}" in
-    *'"./application"'*|*'"/application"'*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 image_plan_action() {
   local name="$1"
   local image_ref="$2"
@@ -209,6 +199,16 @@ image_plan_action() {
       printf 'native arm64 present'
     else
       printf 'will build native'
+    fi
+  elif [[ "${name}" == "folio-module-sidecar" ]] && sidecar_image_is_native_binary "${image_ref}"; then
+    # The configured tag currently holds the native binary from a previous
+    # native run. JVM mode cannot reuse it: the ARM builder rebuilds the JVM
+    # image from source, the amd64 path re-pulls the registry image
+    # (ensure_jvm_sidecar_image).
+    if [[ "${BUILD_ARM_IMAGES}" == "true" ]] && image_ref_is_folio_buildable "${image_ref}"; then
+      printf 'will build arm64'
+    else
+      printf 'will pull or may emulate'
     fi
   elif local_image_is_arm64 "${image_ref}"; then
     printf 'native arm64 present'
@@ -443,6 +443,45 @@ ensure_native_sidecar_image() {
   if ! bash "${PROJECT_ROOT}/misc/build-native-sidecar.sh"; then
     error 'Native sidecar build failed. Rerun ./start.sh without --native-sidecar to use the JVM sidecar.'
   fi
+}
+
+# The mirror image of ensure_native_sidecar_image for the default JVM mode: a
+# previous native run left the GraalVM binary under the configured tag, and the
+# JVM run must not silently keep running it. Two restore paths exist: on amd64
+# (no ARM source builder) the registry image is the only JVM source, so the tag
+# is restored with a one-time pull; on ARM the builder rebuilds the JVM image
+# from source (the published folioci images are amd64-only; pulling there
+# would reintroduce emulation). A tag with no JVM build path at all (e.g. a
+# ':native' tag, which names no git ref and has no registry JVM build) is a
+# mode/tag conflict and halts with both exits.
+ensure_jvm_sidecar_image() {
+  [[ "${SIDECAR_MODE}" != "native" ]] || return 0
+
+  local image="${FOLIO_MODULE_SIDECAR_IMAGE:-}"
+  [[ -n "${image}" ]] || return 0
+  sidecar_image_is_native_binary "${image}" || return 0
+
+  if [[ "${BUILD_ARM_IMAGES}" != "true" ]]; then
+    ui_step "Local ${image} is the native sidecar; restoring the JVM image"
+    if ! docker pull "${image}" >/dev/null 2>&1; then
+      error "Could not restore a JVM ${image} from its registry (offline, or the tag publishes no JVM build). Compose would keep running the native binary. Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+    fi
+    ui_ok "JVM sidecar image restored: ${image}"
+    return 0
+  fi
+
+  if ! image_ref_is_folio_buildable "${image}" || ! sidecar_tag_is_jvm_buildable "${image}"; then
+    error "FOLIO_MODULE_SIDECAR_IMAGE (${image}) holds the native sidecar, and JVM mode has no way to produce a JVM image under this tag (no derivable source ref, no registry JVM build). Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+  fi
+}
+
+# True when the generic ARM builder can derive a git ref for this image tag —
+# its branch rule: *SNAPSHOT*/latest build from master, a semver tag builds
+# from its upstream vX.Y.Z; anything else (e.g. ':native') has no derivable
+# ref and cannot produce a build under that tag.
+sidecar_tag_is_jvm_buildable() {
+  local tag="${1##*:}"
+  [[ "${tag}" == *"SNAPSHOT"* || "${tag}" == "latest" || "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
 # A native sidecar ignores JAVA_OPTIONS and needs far less memory than the JVM
@@ -755,13 +794,18 @@ run_bootstrap_flow() {
   # docker compose call.
   select_gateway_config
 
+  # Remember which image/version variables are already in the shell BEFORE any
+  # repository config is loaded: only those are real operator overrides. Values
+  # introduced by docker/.env(.local)(.credentials) below must be reported as
+  # defaults/overrides, never as "shell override".
+  capture_initial_image_env_names
+
   # Bring docker/.env(.local)(.credentials) values into this shell (set -a
   # exports them): recover_api_gateway_if_needed and the route guard need
   # APISIX_ADMIN_KEY, and compose inherits the interpolated defaults.
   load_folio_config
 
   ui_phase 'Prepare config'
-  capture_initial_image_env_names
   select_sidecar_resources
 
   ui_run 'preparing support images' bash "${PROJECT_ROOT}/misc/build-images.sh"
@@ -770,6 +814,7 @@ run_bootstrap_flow() {
   check_and_handle_descriptor_image_skew
   prompt_image_refresh
   ensure_native_sidecar_image
+  ensure_jvm_sidecar_image
 
   if [[ "${BUILD_ARM_IMAGES}" == 'true' ]]; then
     if [[ "${IMAGE_BUILD_PENDING}" == 'true' ]]; then
