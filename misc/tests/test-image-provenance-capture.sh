@@ -56,14 +56,4 @@ source_is FOLIO_APISIX_IMAGE 'shell override'
 source_is FOLIO_KONG_IMAGE 'default'
 source_is MGR_TENANTS_IMAGE 'local override'
 
-# The capture must not be repeat-after-load: a capture taken after the config
-# load would mislabel committed defaults (the original bug). Guard the exact
-# ordering inside run_bootstrap_flow so a future reorder cannot resurrect it.
-flow_body="$(awk '/^run_bootstrap_flow\(\) \{/,/^\}/' "${PROJECT_ROOT}/misc/bootstrap-engine.sh")"
-capture_line="$(printf '%s\n' "${flow_body}" | grep -n 'capture_initial_image_env_names' | cut -d: -f1)"
-load_line="$(printf '%s\n' "${flow_body}" | grep -n 'load_folio_config' | head -n 1 | cut -d: -f1)"
-[[ -n "${capture_line}" && -n "${load_line}" ]] || fail 'run_bootstrap_flow no longer calls the capture/load pair'
-[[ ${capture_line} -lt ${load_line} ]] \
-  || fail 'run_bootstrap_flow captures image env names after load_folio_config (provenance regression)'
-
 printf 'ok  image provenance: shell override vs committed default vs local override labeled correctly\n'

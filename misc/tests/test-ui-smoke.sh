@@ -5,7 +5,8 @@
 #     piped / NO_COLOR / TERM=dumb;
 #   - ui_prompt renders the question to stderr and honors y/n/default answers;
 #   - live progress (spinner) emits nothing without color, so piped output is
-#     byte-clean.
+#     byte-clean;
+#   - ui_phase_finish is idempotent: no duplicate phase close lines.
 #
 # (ui_run exit propagation and bounded failure output are covered by
 # test-ui-run-errexit-restore.sh and test-ui-run-tail.sh.)
@@ -45,6 +46,10 @@ export NO_COLOR=1 TERM=dumb
   ui_phase_finish done
   ui_phase 'Contract phase 2'
   ui_phase_finish failed
+  ui_phase_finish failed
+  ui_phase 'Contract phase 3'
+  ui_phase_finish done
+  ui_phase_finish done
 ) >"${stdout_file}" 2>"${stderr_file}"
 
 [[ ! -s "${stdout_file}" ]] || {
@@ -61,10 +66,18 @@ if LC_ALL=C grep -q '[^ -~]' "${stderr_file}"; then
 fi
 for expected in 'Contract title' '01 Contract phase' 'Contract step' 'Contract ok' \
                 'Error: Contract error' 'Contract panel' 'Contract check' \
+                '02 Contract phase 2' '03 Contract phase 3' \
                 'failed after' 'done in'; do
   grep -q "${expected}" "${stderr_file}" \
     || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail "missing expected output: ${expected}"; }
 done
+
+# Phase close is idempotent: a stray second finish never prints a duplicate
+# close line, whichever status it carries.
+[[ "$(grep -c 'done in' "${stderr_file}")" -eq 2 ]] \
+  || fail 'phase done-close is not idempotent (duplicate close line)'
+[[ "$(grep -c 'failed after' "${stderr_file}")" -eq 1 ]] \
+  || fail 'phase failed-close is not idempotent (duplicate close line)'
 
 # Debug lines only render when DEBUG is on.
 DEBUG=false

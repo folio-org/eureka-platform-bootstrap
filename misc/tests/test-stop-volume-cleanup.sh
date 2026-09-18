@@ -10,6 +10,10 @@
 #   3. volumes without the project label are never removed;
 #   4. ./stop.sh --yes keeps volumes (never calls docker volume rm).
 #
+# The clear-volumes cases source stop.sh and call its stop_teardown function
+# directly — there is no non-interactive production seam for the destructive
+# path, by design. Case 4 exercises the real entrypoint end-to-end.
+#
 # The gateway selection is session-local, so stop.sh must not depend on the
 # right gateway file being active to clear volumes — hence case 1.
 
@@ -63,26 +67,40 @@ esac
 EOF
 chmod +x "${stub_bin}/docker"
 
-run_stop() {
+# Source stop.sh in a subshell (the run/sourced guard keeps main asleep) and
+# call the teardown function with an explicit decision pair. The status lands
+# in teardown_status; call sites must use this wrapper instead of guarding
+# run_teardown with || or if: a "tested" call context suppresses errexit inside
+# the subshell (bash ignores a set -e armed there), and stop_teardown would run
+# past a real failure.
+teardown_status=0
+run_teardown_checked() {
   : >"${docker_log}"
   set +e
   (
     cd "${PROJECT_ROOT}"
-    PATH="${stub_bin}:${PATH}" NO_COLOR=1 TERM=dumb "$@" ./stop.sh ${STOP_ARGS:-}
+    export PATH="${stub_bin}:${PATH}" NO_COLOR=1 TERM=dumb
+    # shellcheck source=/dev/null
+    source ./stop.sh
+    stop_teardown "$@"
   ) >"${output_file}" 2>&1
-  local status=$?
+  teardown_status=$?
   set -e
-  return "${status}"
+}
+
+expect_ok() {
+  run_teardown_checked "$@"
+  [[ ${teardown_status} -eq 0 ]] || { cat "${output_file}" >&2; fail "teardown $* exited ${teardown_status}"; }
 }
 
 # Case 1 — Kong is the effective stop model (no APIGW_TYPE), a project-labelled
 # APISIX/etcd volume exists alongside the core volumes: all must go.
-STOP_ARGS="--yes" STOP_CLEAR_VOLUMES=true STOP_HAS_CONTAINERS=1 \
+STOP_HAS_CONTAINERS=1 \
   STOP_PROJECT_VOLUMES='folio-platform-minimal_etcd-data
 folio-platform-minimal_db
 folio-platform-minimal_kafka-data
 folio-platform-minimal_vault-data' \
-  run_stop env || { cat "${output_file}" >&2; fail 'case 1: clear-volumes run failed'; }
+  expect_ok true true
 
 grep -q -- '--remove-orphans' "${docker_log}" || fail 'case 1: containers were not removed'
 if grep -q -- '--volumes' "${docker_log}"; then
@@ -95,9 +113,9 @@ grep -q 'Containers and project volumes removed.' "${output_file}" \
 
 # Case 2 — zero project containers, project volumes still present: the request
 # must still remove the volumes (no honest-no-op shortcut).
-STOP_ARGS="--yes" STOP_CLEAR_VOLUMES=true STOP_HAS_CONTAINERS='' \
+STOP_HAS_CONTAINERS='' \
   STOP_PROJECT_VOLUMES='folio-platform-minimal_etcd-data' \
-  run_stop env || { cat "${output_file}" >&2; fail 'case 2: containerless clear-volumes run failed'; }
+  expect_ok true true
 
 grep -q -- 'volume rm folio-platform-minimal_etcd-data' "${docker_log}" \
   || { cat "${output_file}" >&2; fail 'case 2: volumes not removed with no containers present'; }
@@ -111,9 +129,9 @@ fi
 
 # Case 3 — an unrelated volume must never be removed: the discovery listing
 # must be project-label-filtered, and only its output may reach volume rm.
-STOP_ARGS="--yes" STOP_CLEAR_VOLUMES=true STOP_HAS_CONTAINERS='' \
+STOP_HAS_CONTAINERS='' \
   STOP_PROJECT_VOLUMES='folio-platform-minimal_db' \
-  run_stop env || { cat "${output_file}" >&2; fail 'case 3: run failed'; }
+  expect_ok true true
 
 if grep -q -- 'somebody-elses-data' "${docker_log}"; then
   fail 'case 3: an unrelated volume entered the removal path'
@@ -122,9 +140,18 @@ grep -q -- 'volume ls -q --filter label=com.docker.compose.project=folio-platfor
   || fail 'case 3: volume discovery was not project-label-filtered'
 
 # Case 4 — ./stop.sh --yes keeps volumes: no volume rm, no --volumes flag.
-STOP_ARGS="--yes" STOP_HAS_CONTAINERS=1 \
-  STOP_PROJECT_VOLUMES='folio-platform-minimal_db' \
-  run_stop env || { cat "${output_file}" >&2; fail 'case 4: --yes run failed'; }
+# This runs the real entrypoint, so it pins the documented --yes decision
+# (containers removed, volumes kept) end-to-end.
+: >"${docker_log}"
+set +e
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}" NO_COLOR=1 TERM=dumb STOP_HAS_CONTAINERS=1 \
+    STOP_PROJECT_VOLUMES='folio-platform-minimal_db' ./stop.sh --yes
+) >"${output_file}" 2>&1
+yes_status=$?
+set -e
+[[ ${yes_status} -eq 0 ]] || { cat "${output_file}" >&2; fail 'case 4: --yes run failed'; }
 
 if grep -q -- 'volume rm\|--volumes' "${docker_log}"; then
   cat "${docker_log}" >&2
@@ -134,15 +161,9 @@ grep -q 'Containers removed. Volumes kept.' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'case 4: --yes semantics changed'; }
 
 # A volume-discovery failure must be loud, never a silent success.
-set +e
-(
-  cd "${PROJECT_ROOT}"
-  PATH="${stub_bin}:${PATH}" NO_COLOR=1 TERM=dumb \
-    STOP_CLEAR_VOLUMES=true STOP_VOLUME_LS_FAILS=1 ./stop.sh --yes
-) >"${output_file}" 2>&1
-ls_status=$?
-set -e
-[[ ${ls_status} -ne 0 ]] || { cat "${output_file}" >&2; fail 'volume ls failure exited 0'; }
+export STOP_VOLUME_LS_FAILS=1
+run_teardown_checked true true
+[[ ${teardown_status} -ne 0 ]] || { cat "${output_file}" >&2; fail 'volume ls failure exited 0'; }
 grep -q 'docker volume ls failed' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'volume ls failure was not reported'; }
 

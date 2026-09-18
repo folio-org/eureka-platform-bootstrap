@@ -95,16 +95,22 @@ main() {
   parse_args "$@"
 
   # Defaults: remove containers (reversible), keep volumes (destructive).
-  # STOP_CLEAR_VOLUMES is a non-interactive seam for hermetic tests (same
-  # pattern as HEALTH_WAIT_TIMEOUT_SECONDS): it cannot be answered through a
-  # prompt when stdin is not a tty.
   local remove_containers=true
-  local clear_volumes="${STOP_CLEAR_VOLUMES:-false}"
+  local clear_volumes=false
 
   if [[ "${ASSUME_YES}" != true && -t 0 ]]; then
     ui_prompt "Remove containers (stop and delete the stack)?" y || remove_containers=false
     ui_prompt "Clear volumes (DELETES all project data volumes, irreversible)?" n && clear_volumes=true
   fi
+
+  stop_teardown "${remove_containers}" "${clear_volumes}"
+}
+
+# Execute the teardown for an already-collected decision pair. Split from main
+# so the destructive path stays reachable without a hidden env seam: hermetic
+# tests source this script and call stop_teardown directly.
+stop_teardown() {
+  local remove_containers="$1" clear_volumes="$2"
 
   # Clearing volumes requires the containers to be gone first.
   if [[ "${clear_volumes}" == true && "${remove_containers}" != true ]]; then
@@ -165,4 +171,8 @@ main() {
   ui_ok "Containers and project volumes removed."
 }
 
-main "$@"
+# Run only when executed, never when sourced: the hermetic stop tests source
+# this script to drive stop_teardown against a stubbed docker.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

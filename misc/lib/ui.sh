@@ -90,8 +90,7 @@ ui_fmt_seconds() {
 
 ui_title() {
   _ui_clear_progress
-  printf '\n' >&2
-  _ui_emit "$(ui_c run "${UI_BULLET}") $(ui_c strong "$*")"
+  printf '\n%s %s\n' "$(ui_c run "${UI_BULLET}")" "$(ui_c strong "$*")" >&2
 }
 
 ui_step() {
@@ -225,11 +224,10 @@ ui_trunc_tail() {
 ui_panel() {
   local title="$1" right="${2:-}"
   _ui_clear_progress
-  printf '\n' >&2
   if [[ -n "${right}" ]]; then
-    _ui_emit "  $(ui_c strong "${title}")  $(ui_c dim "${right}")"
+    printf '\n  %s  %s\n' "$(ui_c strong "${title}")" "$(ui_c dim "${right}")" >&2
   else
-    _ui_emit "  $(ui_c strong "${title}")"
+    printf '\n  %s\n' "$(ui_c strong "${title}")" >&2
   fi
 }
 

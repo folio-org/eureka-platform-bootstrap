@@ -466,6 +466,12 @@ ensure_jvm_sidecar_image() {
     if ! docker pull "${image}" >/dev/null 2>&1; then
       error "Could not restore a JVM ${image} from its registry (offline, or the tag publishes no JVM build). Compose would keep running the native binary. Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
     fi
+    # The pull happened specifically to replace the native binary; prove it did.
+    # A registry tag that publishes only the native image passes the pull and
+    # would still run the GraalVM binary under Compose.
+    if sidecar_image_is_native_binary "${image}"; then
+      error "Pulled ${image}, but the tag still holds the native sidecar binary (the registry tag has no JVM build). Compose would keep running the native binary. Rerun with --native-sidecar, or point FOLIO_MODULE_SIDECAR_IMAGE at a JVM tag such as folioci/folio-module-sidecar:latest."
+    fi
     ui_ok "JVM sidecar image restored: ${image}"
     return 0
   fi

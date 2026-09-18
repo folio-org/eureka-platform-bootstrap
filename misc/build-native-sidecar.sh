@@ -22,6 +22,7 @@ ui_title "Building Native Sidecar Image"
 derive_sidecar_ref() {
     local image="$1"
     local tag="${image##*:}"
+    local refs
 
     # No ':' in the ref (or ends with '/') means no explicit tag.
     if [ "$tag" = "$image" ]; then
@@ -29,13 +30,19 @@ derive_sidecar_ref() {
     fi
 
     if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        if git ls-remote --tags "$SIDECAR_REPO" "refs/tags/v${tag}" 2>/dev/null | grep -q .; then
-            printf 'v%s' "$tag"
-            return 0
+        # A failed query (offline, unreachable) must not be reported as "tag
+        # does not exist": only an empty, successful listing proves absence.
+        if ! refs="$(git ls-remote --tags "$SIDECAR_REPO" "refs/tags/v${tag}" 2>/dev/null)"; then
+            ui_error "Could not query the upstream tags of ${SIDECAR_REPO} (offline or unreachable); cannot verify that v${tag} exists."
+            exit 1
         fi
-        ui_error "Image tag ${tag} requires upstream git tag v${tag}, which does not exist;"
-        ui_error "refusing to build master and label it ${tag}. Fix FOLIO_MODULE_SIDECAR_IMAGE."
-        exit 1
+        if [[ -z "${refs}" ]]; then
+            ui_error "Image tag ${tag} requires upstream git tag v${tag}, which does not exist;"
+            ui_error "refusing to build master and label it ${tag}. Fix FOLIO_MODULE_SIDECAR_IMAGE."
+            exit 1
+        fi
+        printf 'v%s' "$tag"
+        return 0
     fi
     printf 'master'
 }
