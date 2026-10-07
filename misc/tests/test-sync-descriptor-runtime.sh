@@ -1,63 +1,44 @@
 #!/usr/bin/env bash
-#
-# Hermetic proof that sync_descriptor_runtime preserves operator-sourced
-# MOD_*_IMAGE / MOD_*_VERSION overrides (shell env or .env.local) while still
-# force-refreshing descriptor-derived values after an actualize.
+# Sync preserves operator IMAGE/VERSION overrides at each config layer, while
+# descriptor-derived values are refreshed after actualize.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
-stub_bin="$(mktemp -d)"
 tmp="$(mktemp -d)"
-stdout_file="$(mktemp)"
-stderr_file="$(mktemp)"
-trap 'rm -rf "${stub_bin}" "${tmp}" "${stdout_file}" "${stderr_file}"' EXIT
-
-# Stub python3: run.py --module-env emits the descriptor-derived image/version;
-# the sync (--app) call is a no-op; everything else defers to real python3.
+trap 'rm -rf "${tmp}"' EXIT
+mkdir -p "${tmp}/bin" "${tmp}/docker"
+stdout_file="${tmp}/stdout"
+stderr_file="${tmp}/stderr"
 REAL_PYTHON3="$(command -v python3)"
-cat > "${stub_bin}/python3" <<EOF
+export REAL_PYTHON3
+
+# Only runtime metadata generation is stubbed; module exports follow the test
+# descriptor so actualize can exercise the real unset/re-export path.
+cat >"${tmp}/bin/python3" <<'EOF'
 #!/usr/bin/env bash
-case "\$*" in
-  *'docker-module-updater/run.py'*'--services'*)
-    printf 'mod-users sc-users\n'
-    ;;
+case "$*" in
+  *'docker-module-updater/run.py'*'--services'*) printf 'mod-users sc-users\n' ;;
   *'docker-module-updater/run.py'*'--module-env'*)
-    printf 'export MOD_USERS_IMAGE=folioorg/mod-users:19.6.0\n'
-    printf 'export MOD_USERS_VERSION=19.6.0\n'
+    version="$(jq -r '.modules[0].version' "$3")"
+    printf 'export MOD_USERS_IMAGE=folioorg/mod-users:%s\n' "${version}"
+    printf 'export MOD_USERS_VERSION=%s\n' "${version}"
     ;;
-  *'docker-module-updater/run.py'*)
-    exit 0
-    ;;
-  *)
-    "\${REAL_PYTHON3:?}" "\$@"
-    ;;
+  *'docker-module-updater/run.py'*) ;;
+  *) "${REAL_PYTHON3:?}" "$@" ;;
 esac
 EOF
-chmod +x "${stub_bin}/python3"
-
-# Stub docker: image inspect reports arm64 so the image plan rows render.
-cat > "${stub_bin}/docker" <<'EOF'
+cat >"${tmp}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$1 $2 $3" == "image inspect --format" ]]; then
-  case "$4" in *Architecture*) printf 'arm64\n' ;; esac
-  exit 0
-fi
-exit 0
+case "$*" in
+  'image inspect --format {{.Architecture}} '*) printf 'arm64\n' ;;
+esac
 EOF
-chmod +x "${stub_bin}/docker"
-
-mkdir -p "${tmp}/docker"
-cat > "${tmp}/docker/.env.local" <<'EOF'
-MOD_USERS_IMAGE=custom/mod-users:test
-MOD_USERS_VERSION=19.0.0
-EOF
-
-PATH="${stub_bin}:${PATH}"
+chmod +x "${tmp}/bin/python3" "${tmp}/bin/docker"
+PATH="${tmp}/bin:${PATH}"
 DEBUG=false
 NO_COLOR=1
 TERM=dumb
@@ -67,59 +48,96 @@ source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
 
 DOCKER_DIR="${tmp}/docker"
 FOLIO_DOCKER_DIR="${DOCKER_DIR}"
-APP_DESCRIPTOR_PATH="${PROJECT_ROOT}/descriptors/app-platform-minimal/descriptor.json"
-SECRET_STORE_VAULT_TOKEN='vault-root-token'
-MGR_APPLICATIONS_IMAGE='folioci/mgr-applications:latest'
-MGR_TENANTS_IMAGE='folioci/mgr-tenants:latest'
-MGR_TENANT_ENTITLEMENTS_IMAGE='folioci/mgr-tenant-entitlements:latest'
-FOLIO_KEYCLOAK_IMAGE='folioci/folio-keycloak:latest'
-FOLIO_KONG_IMAGE='folioci/folio-kong:latest'
-FOLIO_MODULE_SIDECAR_IMAGE='folioorg/folio-module-sidecar:latest'
-SIDECAR_MODE='jvm'
-BUILD_ARM_IMAGES='false'
-ASSUME_YES='true'
-ACTUALIZE_MODULES='false'
+APP_DESCRIPTOR_PATH="${tmp}/descriptor.json"
+cat >"${APP_DESCRIPTOR_PATH}" <<'EOF'
+{"id":"app-test-1.0.0","name":"app-test","modules":[{"name":"mod-users","version":"19.6.0"}]}
+EOF
+SIDECAR_MODE=jvm
+BUILD_ARM_IMAGES=false
+ASSUME_YES=true
+ACTUALIZE_MODULES=false
 UI_UNICODE=false
 UI_COLOR=false
 
-# --- Test A: operator override survives the sync and shows up as skew ---------
-# Exported, so the pre-run shell-env provenance arm (initial_env_has_name) is
-# the one under test; the tmp .env.local carries the same values as backup.
-export MOD_USERS_IMAGE='custom/mod-users:test'
-export MOD_USERS_VERSION='19.0.0'
-capture_initial_image_env_names
+cat >"${DOCKER_DIR}/.env" <<'EOF'
+MOD_USERS_IMAGE=folioorg/mod-users:19.4.0
+MOD_USERS_VERSION=19.4.0
+EOF
+printf 'MOD_USERS_VERSION=19.1.0\n' >"${DOCKER_DIR}/.env.local"
+printf 'MOD_USERS_VERSION=19.2.0\n' >"${DOCKER_DIR}/.env.local.credentials"
 
-sync_descriptor_runtime >"${stdout_file}" 2>"${stderr_file}"
+run_sync() { # <expected VERSION> [shell VERSION] [shell IMAGE]
+  set +e
+  (
+    set -euo pipefail
+    unset MOD_USERS_IMAGE MOD_USERS_VERSION
+    if [[ $# -gt 1 ]]; then export MOD_USERS_VERSION="$2"; fi
+    if [[ $# -gt 2 ]]; then export MOD_USERS_IMAGE="$3"; fi
+    capture_initial_image_env_names
+    load_folio_config
+    sync_descriptor_runtime
+    [[ "${MOD_USERS_VERSION}" == "$1" ]] || fail "sync replaced the chosen VERSION with '${MOD_USERS_VERSION}'"
+    [[ "${MOD_USERS_IMAGE}" == "${3:-folioorg/mod-users:19.6.0}" ]] \
+      || fail "sync replaced the chosen IMAGE with '${MOD_USERS_IMAGE}'"
+    check_and_handle_descriptor_image_skew
+  ) >"${stdout_file}" 2>"${stderr_file}"
+  run_status=$?
+  set -e
+  [[ ! -s "${stdout_file}" ]] || fail 'sync or skew guard wrote to stdout'
+}
 
-[[ "${MOD_USERS_IMAGE}" == 'custom/mod-users:test' ]] \
-  || fail "operator MOD_USERS_IMAGE was clobbered by the sync (got '${MOD_USERS_IMAGE}')"
-[[ "${MOD_USERS_VERSION}" == '19.0.0' ]] \
-  || fail "operator MOD_USERS_VERSION was clobbered by the sync (got '${MOD_USERS_VERSION}')"
+assert_skew() { # <chosen VERSION> <winning source>
+  [[ ${run_status} -ne 0 ]] || { cat "${stderr_file}" >&2; fail "VERSION from $2 passed the skew guard"; }
+  grep -Fq "MOD_USERS_VERSION='$1' ($2)" "${stderr_file}" \
+    || { cat "${stderr_file}" >&2; fail "diagnostic did not show the chosen VERSION from $2"; }
+}
 
-grep -q 'custom/mod-users:test' "${stderr_file}" \
-  || { cat "${stderr_file}" >&2; fail 'image plan did not show the operator override'; }
-SKEW_MODULES=(); SKEW_DESCRIPTOR_VERSIONS=(); SKEW_IMAGE_TAGS=()
-: >"${stdout_file}"; : >"${stderr_file}"
-print_image_plan >"${stdout_file}" 2>"${stderr_file}"
-[[ "${#SKEW_MODULES[@]}" -gt 0 && "${SKEW_MODULES[0]}" == 'mod-users' ]] \
-  || fail 'image plan did not report skew for the surviving override'
+# Shell wins even when both override files contain a different VERSION.
+run_sync '19.0.0' '19.0.0'
+assert_skew '19.0.0' 'shell override'
+run_sync '' ''
+assert_skew '' 'shell override'
+run_sync '19.6.0' '19.6.0'
+[[ ${run_status} -eq 0 ]] || fail 'matching shell VERSION did not beat file overrides'
 
-# --- Test B: non-operator values are still force-refreshed by the sync --------
-rm -rf "${tmp}/docker2"
-mkdir -p "${tmp}/docker2"
-DOCKER_DIR="${tmp}/docker2"
-FOLIO_DOCKER_DIR="${DOCKER_DIR}"
-unset MOD_USERS_IMAGE MOD_USERS_VERSION
-capture_initial_image_env_names
-# Simulate a value exported by a PREVIOUS bootstrap sync (not operator-sourced,
-# hence invisible to the initial-env capture): the sync must replace it.
-export MOD_USERS_IMAGE='folioorg/mod-users:19.5.0'
+# IMAGE and VERSION operator overrides both survive the sync.
+run_sync '19.0.0' '19.0.0' 'custom/mod-users:test'
+assert_skew '19.0.0' 'shell override'
+grep -Fq "MOD_USERS_IMAGE='custom/mod-users:test' (shell override)" "${stderr_file}" \
+  || fail 'sync discarded the operator IMAGE override'
 
-sync_descriptor_runtime >"${stdout_file}" 2>"${stderr_file}"
+# Without shell overrides, credentials wins over local; local wins over defaults.
+run_sync '19.2.0'
+assert_skew '19.2.0' 'credentials'
+rm -f "${DOCKER_DIR}/.env.local.credentials"
+run_sync '19.1.0'
+assert_skew '19.1.0' 'local override'
+printf 'MOD_USERS_VERSION=19.6.0\n' >"${DOCKER_DIR}/.env.local"
+run_sync '19.6.0'
+[[ ${run_status} -eq 0 ]] || fail 'matching local VERSION was rejected'
 
-[[ "${MOD_USERS_IMAGE}" == 'folioorg/mod-users:19.6.0' ]] \
-  || fail "descriptor-derived MOD_USERS_IMAGE was not refreshed (got '${MOD_USERS_IMAGE}')"
-[[ "${MOD_USERS_VERSION}" == '19.6.0' ]] \
-  || fail "descriptor-derived MOD_USERS_VERSION was not re-exported (got '${MOD_USERS_VERSION:-}')"
+# With no operator override, stale defaults and a previous sync must be replaced
+# by the actualized descriptor IMAGE and VERSION, rather than causing skew.
+rm -f "${DOCKER_DIR}/.env.local"
+run_module_version_actualizer() {
+  cat >"${APP_DESCRIPTOR_PATH}" <<'EOF'
+{"id":"app-test-1.0.1","name":"app-test","modules":[{"name":"mod-users","version":"19.7.0"}]}
+EOF
+}
+(
+  set -euo pipefail
+  unset MOD_USERS_IMAGE MOD_USERS_VERSION
+  capture_initial_image_env_names
+  load_folio_config
+  export MOD_USERS_IMAGE='folioorg/mod-users:19.5.0'
+  export MOD_USERS_VERSION='19.5.0'
+  ACTUALIZE_MODULES=true
+  sync_descriptor_runtime
+  [[ "${MOD_USERS_IMAGE}" == 'folioorg/mod-users:19.7.0' ]] || fail 'descriptor IMAGE was not refreshed'
+  [[ "${MOD_USERS_VERSION}" == '19.7.0' ]] || fail 'descriptor VERSION was not refreshed'
+  check_and_handle_descriptor_image_skew
+) >"${stdout_file}" 2>"${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'actualize refresh did not produce aligned runtime values'; }
+[[ ! -s "${stdout_file}" ]] || fail 'actualize sync wrote to stdout'
 
-printf 'ok  sync_descriptor_runtime preserves operator overrides and refreshes descriptor values\n'
+printf 'ok  runtime sync preserves shell/credentials/local overrides and refreshes descriptor defaults\n'

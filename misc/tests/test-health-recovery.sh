@@ -249,7 +249,21 @@ case "$*" in
     printf '/%s\n' "${DIAG_NAME:-mgr-applications}"
     ;;
   'logs --tail 200 cid1')
-    printf 'Starting MgrApplication...\nShutting down ExecutorService\nStopping beans in phase\nERROR Application run failed\njava.net.URIcannot be null\n'
+    case "${DIAG_LOG_MODE:-default}" in
+      long-error)
+        for n in 1 2 3 4 5 6 7 8 9 10; do
+          printf 'ERROR long failure %090d diagnostic-error-suffix-%s\n' 0 "${n}"
+        done
+        ;;
+      fallback)
+        for n in 1 2 3 4 5 6 7 8; do
+          printf 'Plain startup log %090d diagnostic-fallback-suffix-%s\n' 0 "${n}"
+        done
+        ;;
+      *)
+        printf 'Starting MgrApplication...\nShutting down ExecutorService\nStopping beans in phase\nERROR Application run failed\njava.net.URIcannot be null\n'
+        ;;
+    esac
     ;;
   *)
     printf 'unexpected docker call: %s\n' "$*" >&2
@@ -289,6 +303,22 @@ fi
 DIAG_EXIT=137 DIAG_OOM=OOMKilled run_diagnostics
 grep -q 'Raise Docker memory' "${stderr_file}" \
   || { cat "${stderr_file}" >&2; fail 'OOMKilled evidence did not raise the memory hint'; }
+
+# Long lines retain their useful suffix; only the number of lines is bounded.
+DIAG_LOG_MODE=long-error run_diagnostics
+grep -q 'diagnostic-error-suffix-8$' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'diagnostics truncated a long error line'; }
+[[ "$(grep -c 'diagnostic-error-suffix-' "${stderr_file}")" -eq 8 ]] \
+  || fail 'diagnostics did not retain exactly eight matching error lines'
+DIAG_LOG_MODE=fallback run_diagnostics
+grep -q 'diagnostic-fallback-suffix-3$' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'diagnostics truncated a long fallback line'; }
+[[ "$(grep -c 'diagnostic-fallback-suffix-' "${stderr_file}")" -eq 6 ]] \
+  || fail 'diagnostics did not retain exactly six fallback lines'
+[[ ! -s "${stdout_file}" ]] || fail 'long failure diagnostics wrote to stdout'
+if LC_ALL=C grep -q "$(printf '\033')" "${stderr_file}"; then
+  fail 'piped failure diagnostics contain ANSI escapes'
+fi
 
 # Case 8: a failure before any container exists explains that, and carries the
 # failing phase/step markers set by the UI layer.
@@ -387,4 +417,96 @@ if grep -q 'foreign-service' "${stderr_file}"; then
   fail 'health wait consulted a container outside the compose project'
 fi
 
-printf 'ok  health-wait timeout recovers the gateway once and diagnostics name the stale-PID fix\n'
+# Measured time includes slow probes and both health windows. Clock advances in
+# same-shell sleep/recovery stubs do not change the polling attempt budget.
+REAL_SLEEP="$(command -v sleep)"
+(
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  COMPOSE_PROJECT_NAME=timed-project
+  HEALTH_WAIT_TIMEOUT_SECONDS=2
+
+  assert_duration_at_least() {
+    local message="$1" minimum="$2" measured
+    measured="$(sed -n "s/.*${message} (\([0-9][0-9]*\)s).*/\1/p" "${stderr_file}" | tail -n 1)"
+    [[ -n "${measured}" && "${measured}" -ge "${minimum}" ]] \
+      || { cat "${stderr_file}" >&2; fail "${message} excluded elapsed probe/recovery time"; }
+  }
+
+  curl() { "${REAL_SLEEP}" 1; printf '200'; }
+  wait_for_http_ready 'http://test/' 'Slow HTTP' 200 2 >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Slow HTTP responding HTTP 200' 1
+
+  timed_sleeps=0
+  sleep() { SECONDS=$((SECONDS + 4)); timed_sleeps=$((timed_sleeps + 1)); }
+  curl() { "${REAL_SLEEP}" 1; printf '503'; }
+  ui_progress() { printf 'progress:%s\n' "$3" >&2; }
+  if wait_for_http_ready 'http://test/' 'Slow HTTP' 200 2 >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'HTTP timeout succeeded'
+  fi
+  assert_duration_at_least 'Slow HTTP did not become ready' 5
+  [[ "${timed_sleeps}" -eq 1 ]] || fail 'HTTP timing changed the retry budget'
+  grep -Eq 'progress:[1-9][0-9]*$' "${stderr_file}" || fail 'HTTP progress excluded probe time'
+
+  : >"${marker_file}"
+  docker() {
+    case "$1 $2" in
+      'ps -aq')
+        if [[ ! -s "${marker_file}" ]]; then
+          "${REAL_SLEEP}" 1
+          printf 'baseline\n' >"${marker_file}"
+        fi
+        ;;
+      'ps -q') printf 'cid1\n' ;;
+      'inspect --format') "${REAL_SLEEP}" 1; printf '/svc1 healthy\n' ;;
+      *) fail "unexpected timed Docker call: $*" ;;
+    esac
+  }
+  wait_for_all_healthy >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Container health ready' 2
+
+  docker() {
+    case "$1 $2" in
+      'ps -aq') "${REAL_SLEEP}" 1 ;;
+      'ps -q') return 1 ;;
+      *) fail "unexpected failed Docker call: $*" ;;
+    esac
+  }
+  if ( wait_for_all_healthy ) >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'unavailable Docker daemon was reported as ready'
+  fi
+  assert_duration_at_least 'Container health failed' 1
+
+  timed_sleeps=0 timed_recoveries=0 timed_recovery_helps=true
+  docker() {
+    case "$1 $2" in
+      'ps -aq') ;;
+      'ps -q') printf 'cid1\n' ;;
+      'inspect --format')
+        if [[ "${timed_recovery_helps}" == true && "${timed_sleeps}" -ge 2 ]]; then
+          printf '/api-gateway healthy\n'
+        else
+          printf '/api-gateway unhealthy\n'
+        fi
+        ;;
+      *) fail "unexpected recovery Docker call: $*" ;;
+    esac
+  }
+  recover_api_gateway_if_needed() {
+    SECONDS=$((SECONDS + 3))
+    timed_recoveries=$((timed_recoveries + 1))
+  }
+  wait_for_all_healthy >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Container health ready' 11
+  [[ "${timed_recoveries}" -eq 1 && "${timed_sleeps}" -eq 2 ]] \
+    || fail 'health timing changed the single-recovery/two-window budget'
+
+  timed_sleeps=0 timed_recoveries=0 timed_recovery_helps=false
+  if ( wait_for_all_healthy ) >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'health wait succeeded after ineffective recovery'
+  fi
+  assert_duration_at_least 'Container health timed out' 11
+  [[ ! -s "${stdout_file}" ]] || fail 'timed health waits wrote to stdout'
+)
+
+printf 'ok  health recovery, measured wait durations, and complete bounded diagnostics\n'

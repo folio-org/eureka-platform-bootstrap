@@ -16,6 +16,7 @@ HEALTH_TOTAL_COUNT=0
 # healthy. Containers without a health check are ignored.
 wait_for_all_healthy() {
   local health_status unhealthy crashed cid inspect_line
+  local start="${SECONDS}"
   local unhealthy_count=0 running_ids
   local gateway_recovery_done=false
   # HEALTH_WAIT_TIMEOUT_SECONDS exists so hermetic tests can exercise the
@@ -46,7 +47,7 @@ wait_for_all_healthy() {
       [[ -n "${inspect_line}" ]] && crashed="${crashed}${inspect_line}"$'\n'
     done < <(comm -13 <(printf '%s\n' "$pre_exited") <(docker ps -aq "${exited_filter[@]}" 2>/dev/null | sort))
     if [[ -n "$crashed" ]]; then
-      ui_fail "Container health failed ($(ui_fmt_seconds "${elapsed}"))"
+      ui_fail "Container health failed ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
       ui_fail 'container(s) crashed while waiting for health:'
       ui_info "$crashed"
       exit 1
@@ -57,7 +58,7 @@ wait_for_all_healthy() {
     # failed call means the daemon went away mid-wait — which must fail
     # loudly, not read as "all healthy".
     if ! running_ids="$(docker ps -q "${running_filter[@]}" 2>/dev/null)"; then
-      ui_fail "Container health failed ($(ui_fmt_seconds "${elapsed}"))"
+      ui_fail "Container health failed ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
       ui_error 'Lost contact with the Docker daemon while waiting for container health.'
       exit 1
     fi
@@ -80,12 +81,12 @@ wait_for_all_healthy() {
     HEALTH_READY_COUNT=$((HEALTH_TOTAL_COUNT - unhealthy_count))
 
     if [[ -z "$unhealthy" ]]; then
-      ui_ok "Container health ready ($(ui_fmt_seconds "${elapsed}"))"
+      ui_ok "Container health ready ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
       break
     fi
 
     if [[ $elapsed -ge $timeout_seconds ]]; then
-      ui_fail "Container health timed out ($(ui_fmt_seconds "${elapsed}"))"
+      ui_fail "Container health timed out ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
       ui_error 'Timed out waiting for containers to become healthy:'
       ui_info "$unhealthy"
       # The gateway recovery below only helps when the api-gateway is the thing
@@ -102,7 +103,7 @@ wait_for_all_healthy() {
       exit 1
     fi
 
-    ui_progress 'Verifying container health' "${HEALTH_READY_COUNT}/${HEALTH_TOTAL_COUNT}" "${elapsed}"
+    ui_progress 'Verifying container health' "${HEALTH_READY_COUNT}/${HEALTH_TOTAL_COUNT}" "$(( SECONDS - start ))"
     sleep 2
     elapsed=$((elapsed + 2))
   done
@@ -161,22 +162,23 @@ wait_for_http_ready() {
   local expected_codes="${3:-200}"
   local timeout_seconds="${4:-120}"
   local elapsed=0 status_code=""
+  local start="${SECONDS}"
 
   ui_step "Verifying ${description}"
   while [[ $elapsed -lt $timeout_seconds ]]; do
     status_code="$(curl -sS -o /dev/null -w '%{http_code}' "${@:5}" "$url" 2>/dev/null || true)"
 
     if [[ " $expected_codes " == *" ${status_code} "* ]]; then
-      ui_ok "${description} responding HTTP ${status_code} ($(ui_fmt_seconds "${elapsed}"))"
+      ui_ok "${description} responding HTTP ${status_code} ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
       return 0
     fi
 
-    ui_progress "Verifying ${description}" "HTTP ${status_code:-000}" "${elapsed}"
+    ui_progress "Verifying ${description}" "HTTP ${status_code:-000}" "$(( SECONDS - start ))"
     sleep 2
     elapsed=$((elapsed + 2))
   done
 
-  ui_fail "${description} did not become ready ($(ui_fmt_seconds "${elapsed}"))"
+  ui_fail "${description} did not become ready ($(ui_fmt_seconds "$(( SECONDS - start ))"))"
   ui_error "Timed out waiting for ${description} at ${url} (last HTTP ${status_code:-000})."
   return 1
 }

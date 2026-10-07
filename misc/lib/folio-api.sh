@@ -181,44 +181,61 @@ gateway_module_service_names() {
   fi
 }
 
-# True when at least one of the application's modules has a service in the
-# active gateway. An unreachable admin API fails open (returns true): a broken
-# probe must not block registration — the smoke check still catches a genuinely
-# unusable stack. A reachable admin API that lists no matching service does NOT
-# fail open: an empty (or foreign-only) store is exactly the route-loss case.
+# Check the enabled version, not the target version awaiting entitlement.
+# Unavailable admin API keeps the existing fail-open behavior. An empty or
+# foreign-only service store proves route loss; unreadable metadata does not.
 application_routable_in_gateway() {
-  local names_file module_id
+  local enabled_descriptor="$1" system_access_token="$2"
+  local names_file module_id module_ids enabled_id
+  local module_ids_filter='[.modules[]? | (.id // (if (.name | type) == "string" and (.version | type) == "string" then .name + "-" + .version else null end))] | select(length > 0 and all(.[]; type == "string" and length > 0)) | .[]'
   names_file="$(mktemp)"
-  # Subshell: gateway_module_service_names goes through api_request, whose
-  # API_RESPONSE_CODE/API_RESPONSE_BODY globals must not clobber the caller's
-  # 409 response body (it is still printed as the conflict notice below).
   if ! ( gateway_module_service_names ) > "${names_file}"; then
     rm -f "${names_file}"
     return 0
   fi
+  if [[ ! -s "${names_file}" ]]; then
+    rm -f "${names_file}"
+    return 1
+  fi
+
+  enabled_id="$(printf '%s' "${enabled_descriptor}" | jq -r '.id // .applicationId')"
+  if ! module_ids="$(printf '%s' "${enabled_descriptor}" | jq -er "${module_ids_filter}" 2>/dev/null)"; then
+    # Older API responses can carry only application ids. Current ids use the
+    # local discovery; an older id needs its own descriptor for correct matching.
+    if [[ "${enabled_id}" == "${APP_ID}" ]]; then
+      if ! module_ids="$(jq -er '[.discovery[].id] | select(length > 0 and all(.[]; type == "string" and length > 0)) | .[]' "${APP_DISCOVERY_PATH}" 2>/dev/null)"; then
+        rm -f "${names_file}"
+        ui_error "Cannot verify gateway routes for enabled application ${enabled_id}: local discovery is invalid."
+        exit 1
+      fi
+    else
+      api_request GET "${GW_URL}/applications/${enabled_id}" \
+        --header "x-okapi-token: ${system_access_token}"
+      if [[ "${API_RESPONSE_CODE}" -lt 200 || "${API_RESPONSE_CODE}" -ge 300 ]] \
+        || ! module_ids="$(printf '%s' "${API_RESPONSE_BODY}" | jq -er --arg id "${enabled_id}" "select(.id == \$id) | ${module_ids_filter}" 2>/dev/null)"; then
+        rm -f "${names_file}"
+        ui_error "Cannot verify gateway routes for enabled application ${enabled_id}: its module metadata is unavailable or invalid."
+        exit 1
+      fi
+    fi
+  fi
 
   while IFS= read -r module_id; do
-    if [[ -n "${module_id}" ]] && grep -qx "${module_id}" "${names_file}"; then
+    if grep -Fxq "${module_id}" "${names_file}"; then
       rm -f "${names_file}"
       return 0
     fi
-  done < <(jq -r '.discovery[].id' "${APP_DISCOVERY_PATH}" 2>/dev/null)
-
+  done <<<"${module_ids}"
   rm -f "${names_file}"
   return 1
 }
 
-# Module routes are created only when mgr-applications first deploys the
-# descriptor and live in the gateway's own store (Kong: the kong schema in
-# postgres, APISIX: etcd). After a gateway switch with kept volumes the
-# descriptor and entitlements are still in the database, so every bootstrap
-# step would skip and the run would die much later at capabilities / user
-# creation with opaque 404 Route Not Found errors. Fail fast with the recovery
-# paths instead — the route-store counterpart of the version-skew halt.
+# Entitlement creates module services/routes in the gateway's own store. A kept
+# entitlement with a lost store cannot be repaired by skipping or upgrading it:
+# unchanged modules are skipped by the upgrade's route creator too.
 halt_on_gateway_without_module_routes() {
-  ui_error "Application ${APP_NAME} is registered, but this ${APIGW_TYPE:-kong} gateway has none of its module routes."
-  ui_info '  Module routes cannot be re-created for a registered application: mgr-applications'
-  ui_info '  refuses to deregister an application that is already enabled for a tenant.'
+  ui_error "Application ${APP_NAME} is enabled for tenant 'diku', but this ${APIGW_TYPE:-kong} gateway has none of its module routes."
+  ui_info '  Skipping entitlement or upgrading cannot reliably restore these routes.'
   ui_info '  Recovery options:'
   ui_info '    1. Clean switch: ./stop.sh and confirm removing volumes, then ./start.sh [--apisix].'
   if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
@@ -246,12 +263,9 @@ register_application_descriptor() {
       --data "@${APP_DESCRIPTOR_PATH}"
 
     if [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
-      if application_routable_in_gateway; then
-        print_api_notice 'Application descriptor is already registered' "$API_RESPONSE_BODY"
-        registration_success=true
-        break
-      fi
-      halt_on_gateway_without_module_routes
+      print_api_notice 'Application descriptor is already registered' "$API_RESPONSE_BODY"
+      registration_success=true
+      break
     elif [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
       ui_ok "Application descriptor registered for ${APP_NAME}."
       registration_success=true
@@ -375,7 +389,7 @@ register_discovery_information() {
 # Poll until the tenant has registered capabilities, refreshing the token when
 # it expires.
 wait_for_capabilities() {
-  local tenant_access_token cap_count
+  local tenant_access_token cap_count wait_start=${SECONDS}
   local cap_wait=0 max_cap_wait=60
   local token_refreshes=0 max_token_refreshes=5
 
@@ -390,7 +404,7 @@ wait_for_capabilities() {
     if [[ "$API_RESPONSE_CODE" == '401' || "$API_RESPONSE_CODE" == '403' ]]; then
       token_refreshes=$((token_refreshes + 1))
       if [[ $token_refreshes -gt $max_token_refreshes ]]; then
-        ui_fail "Capabilities token refresh failed ($(ui_fmt_seconds "${cap_wait}"))"
+        ui_fail "Capabilities token refresh failed ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
         ui_warn "Capabilities check keeps returning HTTP ${API_RESPONSE_CODE} after ${max_token_refreshes} token refreshes; continuing."
         return 0
       fi
@@ -402,24 +416,24 @@ wait_for_capabilities() {
 
     cap_count="$(extract_total_records_count "$API_RESPONSE_BODY")"
     if [[ "$cap_count" -gt 0 ]]; then
-      ui_ok "Capabilities registered (found ${cap_count}) ($(ui_fmt_seconds "${cap_wait}"))"
+      ui_ok "Capabilities registered (found ${cap_count}) ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
       return 0
     fi
 
-    ui_progress 'Waiting for capabilities' '' "${cap_wait}"
+    ui_progress 'Waiting for capabilities' '' "$(( SECONDS - wait_start ))"
     sleep 5
     cap_wait=$((cap_wait + 5))
   done
 
-  ui_fail "Capabilities not registered ($(ui_fmt_seconds "${cap_wait}"))"
-  ui_warn "No capabilities found after ${max_cap_wait}s; the default user may lack permissions."
+  ui_fail "Capabilities not registered ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
+  ui_warn "No capabilities found after $(ui_fmt_seconds "$(( SECONDS - wait_start ))"); the default user may lack permissions."
 }
 
 create_tenant_and_enable_application() {
   local system_access_token="$1"
-  local diku_tenant_id entitlement_flow_id status existing_entitlement_count entitlement_finished=false
+  local diku_tenant_id entitlement_flow_id status enabled_descriptor entitlement_finished=false
   local failed_stages same_name_entitlement_id
-  local max_wait=120 elapsed=0
+  local max_wait=120 elapsed=0 wait_start
 
   ui_step "Creating tenant 'diku'"
   api_request POST "${GW_URL}/tenants" \
@@ -453,23 +467,32 @@ create_tenant_and_enable_application() {
     --header 'Content-Type: application/json' \
     --header 'x-okapi-tenant: diku' \
     --header "x-okapi-token: ${system_access_token}"
-  existing_entitlement_count="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r --arg id "${APP_ID}" 'if type == "array" then map(select(.id == $id or .applicationId == $id)) | length elif .applicationDescriptors? != null then [.applicationDescriptors[]? | select(.id == $id or .applicationId == $id)] | length elif .applications? != null then [.applications[]? | select(.id == $id or .applicationId == $id)] | length else 0 end')"
-
-  if [[ "${existing_entitlement_count}" -gt 0 ]]; then
-    ui_info "Application ${APP_NAME} is already enabled for tenant 'diku' (skipping entitlement)."
-    wait_for_capabilities
-    return 0
+  # Select once so later gateway/metadata probes cannot overwrite the decision.
+  # Unknown/error responses must not be mistaken for an empty entitlement list.
+  if [[ "${API_RESPONSE_CODE}" -lt 200 || "${API_RESPONSE_CODE}" -ge 300 ]] \
+    || ! enabled_descriptor="$(printf '%s' "${API_RESPONSE_BODY}" | jq -c --arg id "${APP_ID}" --arg prefix "${APP_NAME}-" '
+      (if type == "array" then . else .applicationDescriptors // .applications end)
+      | if type != "array" or any(.[]; type != "object" or ((.id // .applicationId) | type) != "string") then error("Invalid entitlement collection") else . end
+      | (map(select((.id // .applicationId) == $id))[0] // map(select((.id // .applicationId) | startswith($prefix)))[0] // empty)
+    ' 2>/dev/null)"; then
+    ui_error "Cannot determine enabled applications for tenant 'diku' (HTTP ${API_RESPONSE_CODE})."
+    exit 1
   fi
 
-  # A warm --actualize bumps the descriptor to a new application id while the
-  # tenant keeps the entitlement of a previous id of the same application name.
-  # mgr-tenant-entitlements rejects a second entitle for a name whose last flow
-  # finished ("Entitle flow finished" -> the whole flow is cancelled), so a new
-  # version of an already-enabled application must go through the upgrade
-  # operation (PUT /entitlements) instead of a fresh POST.
-  same_name_entitlement_id="$(printf '%s\n' "${API_RESPONSE_BODY}" | jq -r --arg prefix "${APP_NAME}-" \
-    'if type == "array" then .[] | (.id // .applicationId // empty) elif .applicationDescriptors? != null then [.applicationDescriptors[]? | (.id // .applicationId // empty)][] elif .applications? != null then [.applications[]? | (.id // .applicationId // empty)][] else empty end | select(startswith($prefix))' | head -n 1)"
+  same_name_entitlement_id=''
+  if [[ -n "${enabled_descriptor}" ]]; then
+    same_name_entitlement_id="$(printf '%s' "${enabled_descriptor}" | jq -r '.id // .applicationId')"
+    if ! application_routable_in_gateway "${enabled_descriptor}" "${system_access_token}"; then
+      halt_on_gateway_without_module_routes
+    fi
+    if [[ "${same_name_entitlement_id}" == "${APP_ID}" ]]; then
+      ui_info "Application ${APP_NAME} is already enabled for tenant 'diku' (skipping entitlement)."
+      wait_for_capabilities
+      return 0
+    fi
+  fi
 
+  # A new version of an enabled application needs PUT upgrade, not POST entitle.
   if [[ -n "${same_name_entitlement_id}" ]]; then
     ui_step "Upgrading entitlement for ${APP_NAME} to the new version for tenant 'diku'"
     api_request PUT "${GW_URL}/entitlements?async=true&tenantParameters=loadSample=true,loadReference=true" \
@@ -489,9 +512,10 @@ create_tenant_and_enable_application() {
     entitlement_flow_id="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '.flowId // empty')"
 
     if [[ -n "$entitlement_flow_id" ]]; then
+      wait_start=${SECONDS}
       ui_step 'Waiting for entitlement'
       while [[ $elapsed -lt $max_wait ]]; do
-        ui_progress 'Waiting for entitlement' '' "${elapsed}"
+        ui_progress 'Waiting for entitlement' '' "$(( SECONDS - wait_start ))"
         sleep 5
         elapsed=$((elapsed + 5))
 
@@ -502,11 +526,11 @@ create_tenant_and_enable_application() {
         status="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '.status // empty')"
 
         if [[ "$status" == 'finished' ]]; then
-          ui_ok "Entitlement completed successfully ($(ui_fmt_seconds "${elapsed}"))"
+          ui_ok "Entitlement completed successfully ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
           entitlement_finished=true
           break
         elif [[ "$status" == 'failed' || "$status" == 'cancelled' ]]; then
-          ui_fail "Entitlement failed ($(ui_fmt_seconds "${elapsed}"))"
+          ui_fail "Entitlement failed ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
           ui_error 'Entitlement failed:'
           failed_stages="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '[.stages[]? | select(.status != "finished") | "\(.type // "stage")=\(.status)"] | join(", ")' 2>/dev/null || true)"
           if [[ -n "${failed_stages}" ]]; then
@@ -520,8 +544,8 @@ create_tenant_and_enable_application() {
       done
 
       if [[ "${entitlement_finished}" != true && $elapsed -ge $max_wait ]]; then
-        ui_fail "Entitlement still in progress ($(ui_fmt_seconds "${elapsed}"))"
-        ui_warn "Entitlement still in progress after ${max_wait}s, continuing anyway..."
+        ui_fail "Entitlement still in progress ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
+        ui_warn "Entitlement still in progress after $(ui_fmt_seconds "$(( SECONDS - wait_start ))"), continuing anyway..."
       fi
     else
       ui_info 'Could not get entitlement ID, waiting 30s...'

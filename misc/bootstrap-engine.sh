@@ -314,7 +314,8 @@ print_image_plan_row() {
 }
 
 print_image_plan() {
-  local module_name module_version prefix image_var image_ref source row
+  local module_name module_version prefix image_var image_ref image_tag source row
+  local version_var version_value mismatch
 
   IMAGE_BUILD_PENDING=false
   IMAGE_REFRESH_AVAILABLE=false
@@ -325,7 +326,7 @@ print_image_plan() {
   PLAN_BUILD_COUNT=0
   SKEW_MODULES=()
   SKEW_DESCRIPTOR_VERSIONS=()
-  SKEW_IMAGE_TAGS=()
+  SKEW_RUNTIME_VALUES=()
 
   print_image_plan_row 'mgr-applications' "${MGR_APPLICATIONS_IMAGE:-}" "$(image_source_for_var MGR_APPLICATIONS_IMAGE default)"
   print_image_plan_row 'mgr-tenants' "${MGR_TENANTS_IMAGE:-}" "$(image_source_for_var MGR_TENANTS_IMAGE default)"
@@ -347,18 +348,27 @@ print_image_plan() {
     prefix="$(printf '%s' "${module_name}" | tr '[:lower:]-' '[:upper:]_')"
     image_var="${prefix}_IMAGE"
     image_ref="${!image_var:-}"
-    print_image_plan_row "${module_name}" "${image_ref}" "$(image_source_for_var "${image_var}" descriptor)"
+    source="$(image_source_for_var "${image_var}" descriptor)"
+    print_image_plan_row "${module_name}" "${image_ref}" "${source}"
 
-    # Skew detection: compare the descriptor version against the effective
-    # image tag. Only assess refs that carry a tag (contain a colon) and are
-    # not digest-pinned — tagless/digest refs cannot be version-compared.
+    # Tagless/digest IMAGE refs cannot be version-compared, but the sidecar's
+    # VERSION must always match the descriptor, including explicit empty values.
+    mismatch=''
     if [[ -n "${image_ref}" && "${image_ref}" == *:* && "${image_ref}" != *@sha256:* ]]; then
-      local image_tag="${image_ref##*:}"
+      image_tag="${image_ref##*:}"
       if [[ "${image_tag}" != "${module_version}" ]]; then
-        SKEW_MODULES+=("${module_name}")
-        SKEW_DESCRIPTOR_VERSIONS+=("${module_version}")
-        SKEW_IMAGE_TAGS+=("${image_tag}")
+        mismatch="${image_var}='${image_ref}' (${source})"
       fi
+    fi
+    version_var="${prefix}_VERSION"
+    version_value="${!version_var:-}"
+    if [[ "${version_value}" != "${module_version}" ]]; then
+      mismatch="${mismatch}${mismatch:+; }${version_var}='${version_value}' ($(image_source_for_var "${version_var}" descriptor))"
+    fi
+    if [[ -n "${mismatch}" ]]; then
+      SKEW_MODULES+=("${module_name}")
+      SKEW_DESCRIPTOR_VERSIONS+=("${module_version}")
+      SKEW_RUNTIME_VALUES+=("${mismatch}")
     fi
   done < <(jq -r '.modules[] | [.name, .version] | @tsv' "${APP_DESCRIPTOR_PATH}")
 
@@ -737,7 +747,7 @@ sync_descriptor_runtime() {
   print_image_plan
 }
 
-# Detects descriptor/image version skew (populated by print_image_plan) and
+# Detects descriptor/runtime version skew (populated by print_image_plan) and
 # either interactively actualizes+resyncs (then re-checks) or hard-halts.
 # Must run AFTER print_image_plan and BEFORE any containers start.
 check_and_handle_descriptor_image_skew() {
@@ -745,9 +755,9 @@ check_and_handle_descriptor_image_skew() {
   [[ ${count} -eq 0 ]] && return 0
 
   local i
-  ui_warn "Descriptor module versions do not match effective image tags (${count} module(s)):"
+  ui_warn "Descriptor module versions do not match effective runtime versions (${count} module(s)):"
   for (( i = 0; i < count; i++ )); do
-    ui_info "  ${SKEW_MODULES[i]}: descriptor ${SKEW_DESCRIPTOR_VERSIONS[i]} vs image ${SKEW_IMAGE_TAGS[i]}"
+    ui_info "  ${SKEW_MODULES[i]}: descriptor ${SKEW_DESCRIPTOR_VERSIONS[i]} vs ${SKEW_RUNTIME_VALUES[i]}"
   done
 
   # Interactive path: offer actualize + resync. Non-interactive (--yes / not
@@ -759,26 +769,24 @@ check_and_handle_descriptor_image_skew() {
         ui_prompt "Use latest SNAPSHOT (pre-release) versions?" n && PRE_RELEASE_MODE=true
       fi
       sync_descriptor_runtime
-      # Re-check: actualize may not resolve skew if a standalone .env.local
-      # override survived cleanup_module_runtime_metadata.
+      # Re-check: actualize may not resolve a preserved operator override.
       count=${#SKEW_MODULES[@]}
       if [[ ${count} -eq 0 ]]; then
-        ui_ok "Descriptor and image versions aligned after actualize."
+        ui_ok "Descriptor and runtime versions aligned after actualize."
         return 0
       fi
-      ui_warn "Skew persists for ${count} module(s) after actualize — a standalone override in the shell environment or docker/.env.local likely survived cleanup."
+      ui_warn "Skew persists for ${count} module(s) after actualize — an override in the shell environment, docker/.env.local.credentials, or docker/.env.local likely survived cleanup."
+      for (( i = 0; i < count; i++ )); do
+        ui_info "  ${SKEW_MODULES[i]}: descriptor ${SKEW_DESCRIPTOR_VERSIONS[i]} vs ${SKEW_RUNTIME_VALUES[i]}"
+      done
     fi
   fi
 
   # Hard halt: actionable message naming the cause and the two recovery paths.
-  ui_error "Descriptor/image version skew prevents a reliable bootstrap."
-  ui_info "  Affected module(s):"
-  for (( i = 0; i < ${#SKEW_MODULES[@]}; i++ )); do
-    ui_info "    ${SKEW_MODULES[i]}: descriptor ${SKEW_DESCRIPTOR_VERSIONS[i]} vs image ${SKEW_IMAGE_TAGS[i]}"
-  done
+  ui_error "Descriptor/runtime version skew prevents a reliable bootstrap."
   ui_info "  Recovery options:"
   ui_info "    1. Run ./start.sh --actualize [--pre-release] to refresh descriptor versions from the registry."
-  ui_info "    2. Remove or align the matching MOD_*_IMAGE / MOD_*_VERSION override in the shell environment or docker/.env.local."
+  ui_info "    2. Remove or align the matching MOD_*_IMAGE / MOD_*_VERSION override in the shell environment, docker/.env.local.credentials, or docker/.env.local."
   ui_info "  Note: a plain ./start.sh --yes re-run will NOT recover from this — the override persists."
   exit 1
 }

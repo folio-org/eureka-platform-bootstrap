@@ -16,6 +16,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
+REAL_SLEEP="$(command -v sleep)"
 stub_bin="$(mktemp -d)"
 stdout_file="$(mktemp)"
 stderr_file="$(mktemp)"
@@ -130,5 +131,34 @@ grep -q 'System access token obtained' "${stderr_file}" \
   || { cat "${stderr_file}" >&2; fail 'system token smoke row missing'; }
 grep -q 'token failed' "${stderr_file}" \
   || { cat "${stderr_file}" >&2; fail 'smoke failure reason missing'; }
+
+# Wall time includes blocking token acquisition and the first successful probe.
+run_snippet '
+  obtain_tenant_access_token() { "${REAL_SLEEP}" 1; printf "tenant-token"; }
+  api_request() { "${REAL_SLEEP}" 1; API_RESPONSE_CODE=200; API_RESPONSE_BODY="{\"totalRecords\":1}"; }
+  wait_for_capabilities
+'
+[[ ${RUN_STATUS} -eq 0 ]] || fail 'slow successful capabilities probe failed'
+seconds="$(sed -n 's/.*Capabilities registered.*(\([0-9][0-9]*\)s).*/\1/p' "${stderr_file}")"
+[[ -n "${seconds}" && ${seconds} -ge 2 ]] || { cat "${stderr_file}" >&2; fail 'capabilities duration omitted token/probe time'; }
+
+# Advance only the caller clock, leaving the existing retry budgets unchanged.
+run_snippet '
+  obtain_tenant_access_token() { printf "tenant-token"; }
+  api_request() { SECONDS=$((SECONDS + 1)); API_RESPONSE_CODE=200; API_RESPONSE_BODY="{\"totalRecords\":0}"; }
+  sleep() { SECONDS=$((SECONDS + $1)); }
+  wait_for_capabilities
+'
+[[ ${RUN_STATUS} -eq 0 ]] || fail 'capabilities timeout must retain soft continuation'
+grep -q 'No capabilities found after 1m' "${stderr_file}" || { cat "${stderr_file}" >&2; fail 'capabilities timeout duration omitted probe time'; }
+run_snippet '
+  obtain_tenant_access_token() { printf "tenant-token"; }
+  api_request() { SECONDS=$((SECONDS + 1)); API_RESPONSE_CODE=401; API_RESPONSE_BODY="{}"; }
+  sleep() { SECONDS=$((SECONDS + $1)); }
+  wait_for_capabilities
+'
+[[ ${RUN_STATUS} -eq 0 ]] || fail 'token refresh exhaustion must retain soft continuation'
+seconds="$(sed -n 's/.*Capabilities token refresh failed (\([0-9][0-9]*\)s).*/\1/p' "${stderr_file}")"
+[[ -n "${seconds}" && ${seconds} -ge 16 ]] || { cat "${stderr_file}" >&2; fail 'refresh failure duration omitted probes'; }
 
 printf 'ok  capabilities wait and smoke check propagate token failures with reasons\n'

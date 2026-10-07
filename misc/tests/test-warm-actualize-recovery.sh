@@ -21,6 +21,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
+export REAL_SLEEP="$(command -v sleep)"
 stub_bin="$(mktemp -d)"
 test_dir="$(mktemp -d)"
 output_file="$(mktemp)"
@@ -66,7 +67,8 @@ case "$*" in
     esac
     body='{"entitlements":[],"flowId":"flow-1","totalRecords":0}' ;;
   *"/entitlement-flows/"*)
-    body='{"id":"flow-1","status":"finished","stages":[]}' ;;
+    [[ "${FLOW_DELAY:-0}" == 0 ]] || "${REAL_SLEEP}" "${FLOW_DELAY}"
+    body="{\"id\":\"flow-1\",\"status\":\"${FLOW_STATUS:-finished}\",\"stages\":[]}" ;;
   *"/tenants?query"*)
     body='{"tenants":[{"id":"tenant-1","name":"diku"}],"totalRecords":1}' ;;
   *"/tenants"*)
@@ -91,6 +93,7 @@ exit 0
 EOF
 chmod +x "${stub_bin}/sleep"
 
+SECRET_STORE_VAULT_TOKEN='stub-vault-token'
 DEBUG=false
 # shellcheck source=/dev/null
 source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
@@ -144,6 +147,8 @@ run_enable() {
   : > "${entitlement_log}"
   set +e
   (
+    sleep() { SECONDS=$((SECONDS + $1 + ${CLOCK_OVERHEAD:-0})); }
+    export FLOW_DELAY="${FLOW_DELAY:-0}" FLOW_STATUS="${FLOW_STATUS:-finished}"
     PATH="${stub_bin}:${PATH}" \
     ENABLED_APPLICATIONS_FILE="${1:?}" \
     ENTITLEMENT_CALL_LOG="${entitlement_log}" \
@@ -173,5 +178,15 @@ grep -qx 'POST' "${entitlement_log}" \
   || { cat "${output_file}" >&2; fail 'fresh entitlement must use the entitle operation (POST)'; }
 grep -q 'Enabling (entitling)' "${output_file}" \
   || { cat "${output_file}" >&2; fail 'missing the enabling-entitlement step line'; }
+
+# The probe's wall time must be included, beyond the existing five-second wait.
+FLOW_DELAY=1 run_enable "${enabled_empty}" || { cat "${output_file}" >&2; fail 'slow entitlement probe failed'; }
+seconds="$(sed -n 's/.*Entitlement completed successfully (\([0-9][0-9]*\)s).*/\1/p' "${output_file}")"
+[[ -n "${seconds}" && ${seconds} -ge 6 ]] || { cat "${output_file}" >&2; fail 'entitlement duration omitted the flow probe'; }
+FLOW_STATUS=failed FLOW_DELAY=1 run_enable "${enabled_empty}" && fail 'failed flow returned success'
+seconds="$(sed -n 's/.*Entitlement failed (\([0-9][0-9]*\)s).*/\1/p' "${output_file}")"
+[[ -n "${seconds}" && ${seconds} -ge 6 ]] || { cat "${output_file}" >&2; fail 'failed flow duration omitted probe time'; }
+FLOW_STATUS=running CLOCK_OVERHEAD=2 run_enable "${enabled_empty}" || fail 'entitlement timeout must retain soft continuation'
+grep -q 'Entitlement still in progress after 2m' "${output_file}" || { cat "${output_file}" >&2; fail 'entitlement timeout warning must report measured time'; }
 
 printf 'ok  warm actualize recovery: per-module discovery fallback and PUT-based entitlement upgrade\n'

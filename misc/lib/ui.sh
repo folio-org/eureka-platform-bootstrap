@@ -232,7 +232,7 @@ ui_panel() {
 }
 
 ui_panel_row() {
-  _ui_emit "    $(ui_trunc "$*" "${UI_PANEL_WIDTH}")"
+  _ui_emit "    $*"
 }
 
 ui_panel_kv() {

@@ -63,13 +63,16 @@ descriptor change plus matching Compose services — never a runtime option.
 Every step is idempotent; recovery from any failure is a plain `./start.sh`
 re-run. On top of that, two halts protect warm runs from silent corruption:
 
-- **Descriptor/image skew**: if an effective `MOD_*_IMAGE` tag disagrees with
-  the descriptor version (e.g. a stale `.env.local` override), the run halts
-  before containers start and names the module and both recovery paths.
-  Digest-pinned refs are exempt.
-- **Gateway route loss**: a registered application whose module routes are
-  missing from the active gateway's store (classic gateway switch with kept
-  volumes) fails fast with recovery paths instead of opaque 404s later.
+- **Descriptor/runtime skew**: if an effective `MOD_*_IMAGE` tag or
+  `MOD_*_VERSION` disagrees with the descriptor, the run halts before containers
+  start and names the variable, its source, and the recovery paths. Tagless and
+  digest-pinned images are exempt from the image check, not the version check.
+- **Gateway route loss**: before skipping entitlement or upgrading an enabled
+  application, the gateway must have a service matching the enabled version's
+  modules. A lost store fails fast with recovery paths. An unavailable admin
+  probe keeps the existing fail-open behavior; unreadable entitlement or module
+  metadata fails with a verification error. Descriptor-only registration can
+  resume because module services/routes are created during entitlement.
 
 A warm `--actualize` bumps module versions and the application id; discovery
 then falls back to per-module registration (the bulk endpoint rejects mixed
