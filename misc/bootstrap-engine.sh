@@ -801,7 +801,6 @@ run_bootstrap_flow() {
 
   # Any hard failure below exits via set -e. Surface a bounded diagnostic snapshot
   # first, then propagate the original exit code. A clean run (rc 0) is a no-op.
-  # Recovery is a plain re-run of ./start.sh — every step is idempotent.
   trap 'rc=$?; [[ $rc -ne 0 ]] && dump_failure_diagnostics || true; exit $rc' EXIT
 
   # Set COMPOSE_FILE and GATEWAY_PROFILE from APIGW_TYPE before the first

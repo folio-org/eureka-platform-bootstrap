@@ -223,6 +223,13 @@ chmod +x "${stub_bin}/docker"
   dump_failure_diagnostics
 ) >"${stdout_file}" 2>"${stderr_file}"
 [[ ! -s "${stdout_file}" ]] || fail 'failure diagnostics wrote to stdout'
+grep -q 'Fix the reported cause' "${stderr_file}" \
+  || fail 'diagnostics must explain that rerun depends on fixing the cause'
+grep -q 'same gateway and sidecar options' "${stderr_file}" \
+  || fail 'diagnostics must preserve runtime choices during recovery'
+if grep -q 'every step is idempotent' "${stderr_file}"; then
+  fail 'diagnostics must not promise unconditional recovery'
+fi
 grep -q 'already running in /usr/local/kong' "${stderr_file}" \
   || fail 'diagnostics did not show the stale-Kong log line'
 grep -q 'rm -f /usr/local/kong/pids/nginx.pid' "${stderr_file}" \

@@ -259,7 +259,7 @@ dump_failure_diagnostics() {
   fi
   ui_panel_end
 
-  ui_info "$(ui_c run '->') Re-run ./start.sh - every step is idempotent."
+  ui_info "$(ui_c run '->') Fix the reported cause, then re-run ./start.sh with the same gateway and sidecar options."
   if [[ "${stale_kong}" == true ]]; then
     ui_info "api-gateway reports \"Kong is already running\": recover in-place with rm -f /usr/local/kong/pids/nginx.pid && kong migrations bootstrap && kong migrations up && kong migrations finish && kong start (in the api-gateway container), or rerun ./start.sh after ./stop.sh."
   fi

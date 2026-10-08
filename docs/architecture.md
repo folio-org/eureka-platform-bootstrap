@@ -55,26 +55,32 @@ module set. `misc/docker-module-updater/run.py` derives from it:
 - cleanup of superseded generated module state in `docker/.env.local`.
 
 `--actualize` first refreshes descriptor versions from the FOLIO registry
-(`misc/module-version-actualizer.py`), then re-syncs. Adding a module is a
-descriptor change plus matching Compose services — never a runtime option.
+(`misc/module-version-actualizer.py`), selecting the latest release or, with
+`--pre-release`, the latest SNAPSHOT without comparing version direction, then
+re-syncs. Adding a module is a descriptor change plus matching Compose services
+— never a runtime option.
 
 ## Guards and warm-run semantics
 
-Every step is idempotent; recovery from any failure is a plain `./start.sh`
-re-run. On top of that, two halts protect warm runs from silent corruption:
+Warm reruns reuse registered metadata and tenant state. After a failure, fix
+the reported cause and rerun with the same gateway and sidecar options.
+Entitlement retries require compatible module/data versions and may fail after
+partially applied gateway updates. Two halts protect warm runs from silent
+corruption:
 
 - **Descriptor/runtime skew**: if an effective `MOD_*_IMAGE` tag or
   `MOD_*_VERSION` disagrees with the descriptor, the run halts before containers
   start and names the variable, its source, and the recovery paths. Tagless and
   digest-pinned images are exempt from the image check, not the version check.
 - **Gateway route loss**: before skipping entitlement or upgrading an enabled
-  application, the gateway must have a service matching the enabled version's
-  modules. A lost store fails fast with recovery paths. An unavailable admin
+  application, the gateway must have at least one service matching the enabled
+  version's modules. This guard does not verify complete route integrity. A
+  missing service store fails fast with recovery paths. An unavailable admin
   probe keeps the existing fail-open behavior; unreadable entitlement or module
   metadata fails with a verification error. Descriptor-only registration can
   resume because module services/routes are created during entitlement.
 
-A warm `--actualize` bumps module versions and the application id; discovery
+A warm `--actualize` changes module versions and the application id; discovery
 then falls back to per-module registration (the bulk endpoint rejects mixed
 batches), and entitlement goes through the upgrade operation (PUT) rather than
 a fresh POST, which managers reject for an already-enabled application name.

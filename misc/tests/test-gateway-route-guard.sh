@@ -27,6 +27,8 @@ older='{"id":"app-platform-minimal-0.0.1","modules":[{"name":"mod-alpha","versio
 ENABLED_BODY='[]'
 ENABLED_STATUS=200
 DESCRIPTOR_STATUS=409
+DESCRIPTOR_BODY='{"message":"descriptor already registered"}'
+DESCRIPTOR_RECOVERY_STATUS=''
 DISCOVERY_STATUS=201
 MODULE_STATUS=201
 SERVICES=''
@@ -52,7 +54,8 @@ api_request() {
       fi ;;
     */applications)
       API_RESPONSE_CODE="${DESCRIPTOR_STATUS}"
-      API_RESPONSE_BODY='{"message":"descriptor already registered"}' ;;
+      API_RESPONSE_BODY="${DESCRIPTOR_BODY}"
+      DESCRIPTOR_STATUS="${DESCRIPTOR_RECOVERY_STATUS:-${DESCRIPTOR_STATUS}}" ;;
     */modules/discovery) API_RESPONSE_CODE="${DISCOVERY_STATUS}" ;;
     */modules/*/discovery) API_RESPONSE_CODE="${MODULE_STATUS}" ;;
     */tenants?*) API_RESPONSE_BODY='{"tenants":[{"id":"tenant-1"}]}' ;;
@@ -97,6 +100,29 @@ expect_halt() {
 }
 
 for gateway in kong apisix; do
+  DESCRIPTOR_STATUS=404
+  DESCRIPTOR_BODY='{"message":"registration endpoint unavailable"}'
+  run_bootstrap_registration "${gateway}"
+  expect_halt 'descriptor 404 must halt immediately'
+  [[ "$(wc -l <"${request_log}" | tr -d ' ')" == 1 ]] || fail 'descriptor 404 must not retry or continue bootstrap'
+  grep -q 'registration endpoint unavailable' "${stderr_file}" || fail 'descriptor 404 response was lost'
+  grep -q "${gateway} gateway route to mgr-applications" "${stderr_file}" || fail 'descriptor 404 must name the selected gateway and manager'
+  grep -q 'If that route is missing' "${stderr_file}" || fail 'descriptor 404 must not assert route loss as its cause'
+  grep -q 'keeping volumes' "${stderr_file}" || fail 'manager registration recovery must preserve volumes'
+
+  DESCRIPTOR_BODY='{"message":"descriptor already registered"}'
+  for DESCRIPTOR_STATUS in 503 504; do
+    DESCRIPTOR_RECOVERY_STATUS=201
+    run_bootstrap_registration "${gateway}"
+    expect_success 'transient descriptor failure must remain recoverable'
+    [[ "$(grep -c '^POST .*/applications$' "${request_log}")" == 2 ]] || fail 'descriptor retry did not reach success'
+    DESCRIPTOR_RECOVERY_STATUS=''
+    run_bootstrap_registration "${gateway}"
+    expect_halt 'persistent descriptor failure must remain bounded'
+    [[ "$(grep -c '^POST .*/applications$' "${request_log}")" == 3 ]] || fail 'descriptor retry budget changed'
+  done
+  DESCRIPTOR_STATUS=409
+
   # Resume after descriptor-only registration, including mixed discovery state.
   ENABLED_BODY='[]'
   SERVICES=''

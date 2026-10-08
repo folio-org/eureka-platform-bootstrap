@@ -44,6 +44,14 @@ and bootstrap repository.
 ./start.sh --debug                           # stream all helper output
 ```
 
+`--actualize` selects the latest release from the registry; `--pre-release`
+selects the latest SNAPSHOT. Either selection may move versions up or down.
+After a failed run, fix the reported cause and rerun with the same gateway and
+sidecar options. Recovery requires module versions compatible with stored data.
+A failed entitlement can leave module and gateway state partially updated;
+a rerun is not guaranteed to repair it. If a selected module cannot read
+existing data, select a compatible version before retrying.
+
 ## How it is organized
 
 `start.sh` stays thin; the logic lives in focused libraries:
@@ -74,6 +82,10 @@ need low-level Docker access can work directly from `docker/` with native
 ./stop.sh         # prompts: remove containers (default yes), clear volumes (default no)
 ./stop.sh --yes   # non-interactive: remove containers, keep volumes
 ```
+
+If Kong keeps sending requests to old sidecar IPs after containers are
+recreated, use `./stop.sh --yes` followed by `./start.sh` with the same gateway
+and sidecar options. This restarts the gateway while keeping data volumes.
 
 Clearing volumes deletes **every data volume belonging to this Compose project**
 (PostgreSQL, Kafka, Vault — and APISIX's `etcd-data` if it exists), discovered

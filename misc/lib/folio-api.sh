@@ -231,8 +231,7 @@ application_routable_in_gateway() {
 }
 
 # Entitlement creates module services/routes in the gateway's own store. A kept
-# entitlement with a lost store cannot be repaired by skipping or upgrading it:
-# unchanged modules are skipped by the upgrade's route creator too.
+# entitlement with a lost store must not be treated as a healthy warm run.
 halt_on_gateway_without_module_routes() {
   ui_error "Application ${APP_NAME} is enabled for tenant 'diku', but this ${APIGW_TYPE:-kong} gateway has none of its module routes."
   ui_info '  Skipping entitlement or upgrading cannot reliably restore these routes.'
@@ -277,6 +276,11 @@ register_application_descriptor() {
     else
       ui_error "Request failed with HTTP code ${API_RESPONSE_CODE}:"
       print_api_payload "$API_RESPONSE_BODY" stderr
+      if [[ "$API_RESPONSE_CODE" -eq 404 ]]; then
+        ui_info "Check the ${APIGW_TYPE:-kong} gateway route to mgr-applications."
+        ui_info 'If that route is missing, ./stop.sh --yes then ./start.sh with the same gateway and sidecar options can retry manager registration, keeping volumes.'
+        ui_info 'Module routes require separate recovery; restarting managers does not restore them.'
+      fi
       exit 1
     fi
   done
