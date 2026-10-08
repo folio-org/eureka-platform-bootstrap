@@ -83,10 +83,6 @@ need low-level Docker access can work directly from `docker/` with native
 ./stop.sh --yes   # non-interactive: remove containers, keep volumes
 ```
 
-If Kong keeps sending requests to old sidecar IPs after containers are
-recreated, use `./stop.sh --yes` followed by `./start.sh` with the same gateway
-and sidecar options. This restarts the gateway while keeping data volumes.
-
 Clearing volumes deletes **every data volume belonging to this Compose project**
 (PostgreSQL, Kafka, Vault — and APISIX's `etcd-data` if it exists), discovered
 by the Compose project label rather than by name. It is gateway-independent:
@@ -105,6 +101,9 @@ nodes are running.
 ## API gateway
 
 Kong is the default API gateway. Apache APISIX is a fully supported alternative.
+
+Kong limits DNS record caching to five seconds so it can pick up new container
+IPs during warm starts without a gateway restart.
 
 ### Selecting a gateway
 
