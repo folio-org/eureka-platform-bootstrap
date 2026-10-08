@@ -21,11 +21,13 @@ and bootstrap repository.
 `./start.sh` is the single entrypoint. It:
 
 - checks required tools
-- asks at most a couple of questions (actualize module versions; on Apple Silicon,
-  build ARM images)
-- creates or updates local env files (`docker/.env.local`, `docker/.env.local.credentials`)
+- asks up to three setup questions (actualize module versions; native or JVM
+  sidecar; Kong or APISIX gateway) plus conditional follow-ups — ARM image
+  builds happen automatically when needed, they are not a question
 - starts `core`, then `mgr-components`, then the bundled `app-platform-minimal`
   services by name
+- persists the runtime Vault root token to `docker/.env.local.credentials`
+  (deterministic development defaults live committed in `docker/.env`)
 - registers the bundled application descriptor and discovery metadata
 - creates tenant `diku` and the default admin user `folio/folio`
 - finishes with a short smoke check (api-gateway reachable, tenant token, `diku`
@@ -42,6 +44,14 @@ and bootstrap repository.
 ./start.sh --debug                           # stream all helper output
 ```
 
+`--actualize` selects the latest release from the registry; `--pre-release`
+selects the latest SNAPSHOT. Either selection may move versions up or down.
+After a failed run, fix the reported cause and rerun with the same gateway and
+sidecar options. Recovery requires module versions compatible with stored data.
+A failed entitlement can leave module and gateway state partially updated;
+a rerun is not guaranteed to repair it. If a selected module cannot read
+existing data, select a compatible version before retrying.
+
 ## How it is organized
 
 `start.sh` stays thin; the logic lives in focused libraries:
@@ -50,7 +60,8 @@ and bootstrap repository.
 | --- | --- |
 | `start.sh` | argument parsing, prompts, tool checks, run the flow |
 | `misc/bootstrap-engine.sh` | phase orchestration (`run_bootstrap_flow`) and local setup |
-| `misc/lib/folio-common.sh` | logging, config loading, output helpers, dependency checks |
+| `misc/lib/ui.sh` | presentation helpers (stderr-only, color-gated) |
+| `misc/lib/folio-common.sh` | config loading (precedence) and dependency checks |
 | `misc/lib/folio-api.sh` | tokens, descriptor/discovery registration, entitlement, smoke check |
 | `misc/lib/docker-health.sh` | container health and HTTP route readiness waits |
 
@@ -72,6 +83,13 @@ need low-level Docker access can work directly from `docker/` with native
 ./stop.sh --yes   # non-interactive: remove containers, keep volumes
 ```
 
+Clearing volumes deletes **every data volume belonging to this Compose project**
+(PostgreSQL, Kafka, Vault — and APISIX's `etcd-data` if it exists), discovered
+by the Compose project label rather than by name. It is gateway-independent:
+it works even when the previous run used the other gateway, and even when the
+containers are already gone. Volumes that do not belong to this project are
+never touched.
+
 ## Keycloak topology
 
 Keycloak runs as a **single node** by default. To scale the cluster, uncomment the
@@ -83,6 +101,9 @@ nodes are running.
 ## API gateway
 
 Kong is the default API gateway. Apache APISIX is a fully supported alternative.
+
+Kong limits DNS record caching to five seconds so it can pick up new container
+IPs during warm starts without a gateway restart.
 
 ### Selecting a gateway
 
@@ -133,11 +154,27 @@ Override the gateway image in `docker/.env` or via shell env:
 
 ## Configuration model
 
-- `docker/.env` — committed defaults
-- `docker/.env.local` — local non-secret overrides (image tags, generated versions)
-- `docker/.env.local.credentials` — local secrets and Vault token state
+- `docker/.env` — committed defaults (deterministic local development credentials)
+- `docker/.env.local` — local non-secret overrides (e.g. image tags)
+- `docker/.env.local.credentials` — the runtime Vault root token, plus any
+  operator-added secrets (never committed)
 
 Service-level environment variables are defined inline in the Compose files.
+
+`APIGW_TYPE` and `SIDECAR_MODE` are runtime choices, not config-file settings:
+`start.sh` takes them from the shell environment, its flags (`--apisix`,
+`--native-sidecar`), or the interactive prompts before it loads any config
+files, so a value in `docker/.env.local` never influences a `start.sh` run.
+The gateway choice is therefore session-local. `./stop.sh` has no gateway flag
+either — it reads `APIGW_TYPE` the same way to pick the gateway Compose file
+for container teardown (defaulting to Kong), but its clear-volumes action is
+label-scoped and removes every project volume whichever gateway was active.
+
+Sidecar runtime mode is a real switch, not a preference: `--native-sidecar`
+rebuilds the configured sidecar tag as a GraalVM native image, and a later
+plain `./start.sh` restores the JVM image under that same tag (rebuilds it on
+ARM, re-pulls it from the registry on x86_64), so the mode you request is the
+runtime you get.
 
 ## Validation
 
@@ -149,23 +186,6 @@ bash misc/tests/run.sh                 # offline: shell syntax + python unit tes
 ./start.sh --yes
 ```
 
-## Agent skill
-
-The source of the `local-eureka-env` agent Skill lives in
-[`skills/local-eureka-env/`](skills/local-eureka-env/SKILL.md). It teaches coding
-agents to operate this environment from any FOLIO repository: run Karate or
-integration tests against it, deploy locally built module images, attach
-debuggers, and reproduce or verify issues.
-
-Install it from the repository root:
-
-```bash
-npx skills add .                                  # interactive: select local-eureka-env
-npx skills add . --skill local-eureka-env --global --agent claude-code --agent opencode
-```
-
 ## Documentation
 
-- Architecture overview: `docs/architecture/README.md`
-- Supported workflows: `docs/architecture/supported-workflows.md`
-- Roadmap: `docs/roadmap/README.md`
+- Architecture and internal model: `docs/architecture.md`

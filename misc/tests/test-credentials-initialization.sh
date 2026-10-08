@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 #
-# A first bootstrap must seed credentials from the effective local configuration,
-# not replace docker/.env.local values with hard-coded fallback defaults.
+# docker/.env.local.credentials persistence:
+#   - deterministic dev defaults are NOT seeded there (they live committed in
+#     docker/.env; the generated file holds only the runtime Vault token);
+#   - persisting a token preserves operator-added lines and replaces any
+#     previous token in place.
 
 set -euo pipefail
 
@@ -10,38 +13,41 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "${tmp}"' EXIT
+work="$(mktemp -d)"
+trap 'rm -rf "${work}"' EXIT
 
-mkdir -p "${tmp}/docker"
-cat > "${tmp}/docker/.env" <<'EOF'
-POSTGRES_PASSWORD=default-password
-KC_DB_PASSWORD=default-keycloak-password
-OKAPI_DB_PASSWORD=default-okapi-password
-KONG_DB_PASSWORD=default-kong-password
-MGR_APPLICATIONS_DB_PASSWORD=default-applications-password
-MGR_TENANTS_DB_PASSWORD=default-tenants-password
-MGR_TENANT_ENTITLEMENTS_DB_PASSWORD=default-entitlements-password
-KC_ADMIN_PASSWORD=default-admin-password
-KC_ADMIN_CLIENT_SECRET=default-client-secret
-EOF
-cat > "${tmp}/docker/.env.local" <<'EOF'
-POSTGRES_PASSWORD=local-password
-EOF
+creds_file="${work}/.env.local.credentials"
 
-(
-  unset POSTGRES_PASSWORD KC_DB_PASSWORD OKAPI_DB_PASSWORD KONG_DB_PASSWORD
-  unset MGR_APPLICATIONS_DB_PASSWORD MGR_TENANTS_DB_PASSWORD
-  unset MGR_TENANT_ENTITLEMENTS_DB_PASSWORD KC_ADMIN_PASSWORD KC_ADMIN_CLIENT_SECRET
-  PROJECT_ROOT="${PROJECT_ROOT}"
+persist_token() (
+  cd "${work}"
   # shellcheck source=/dev/null
-  source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
-  DOCKER_DIR="${tmp}/docker"
-  FOLIO_DOCKER_DIR="${DOCKER_DIR}"
-  refresh_local_credentials
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/docker/lib/local-credentials.sh"
+  persist_vault_root_token "$1"
 )
 
-grep -qx 'export POSTGRES_PASSWORD=local-password' "${tmp}/docker/.env.local.credentials" \
-  || { cat "${tmp}/docker/.env.local.credentials" >&2; fail 'local password was not preserved when seeding credentials'; }
+# First persistence creates the file with the token and no seeded defaults.
+persist_token 's.firstToken' >/dev/null 2>&1
+grep -q 'export SECRET_STORE_VAULT_TOKEN=s.firstToken' "${creds_file}" \
+  || { cat "${creds_file}" >&2; fail 'first persistence is missing the token'; }
+if grep -Eq 'POSTGRES_PASSWORD|KC_ADMIN_PASSWORD' "${creds_file}"; then
+  cat "${creds_file}" >&2
+  fail 'first persistence seeded deterministic defaults (they belong in docker/.env)'
+fi
 
-echo 'ok  initial credentials preserve docker/.env.local overrides'
+# Operator-added secrets survive a token refresh, and an old token is replaced.
+printf 'export POSTGRES_PASSWORD=operator-choice\n' >> "${creds_file}"
+persist_token 's.secondToken' >/dev/null 2>&1
+grep -qx 'export POSTGRES_PASSWORD=operator-choice' "${creds_file}" \
+  || { cat "${creds_file}" >&2; fail 'operator-added secret did not survive a token refresh'; }
+grep -q 'export SECRET_STORE_VAULT_TOKEN=s.secondToken' "${creds_file}" \
+  || { cat "${creds_file}" >&2; fail 'refreshed token missing'; }
+[[ "$(grep -c 'SECRET_STORE_VAULT_TOKEN=' "${creds_file}")" == '1' ]] \
+  || { cat "${creds_file}" >&2; fail 'token appears more than once after refresh'; }
+if grep -q 's.firstToken' "${creds_file}"; then
+  cat "${creds_file}" >&2
+  fail 'stale token survived the refresh'
+fi
+
+echo 'ok  credentials file holds only the Vault token and preserves operator lines'

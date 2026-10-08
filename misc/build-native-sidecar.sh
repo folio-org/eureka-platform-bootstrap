@@ -15,12 +15,14 @@ ui_title "Building Native Sidecar Image"
 
 # Derive the git ref to build from the image tag — the single source of truth.
 # A semver tag (4.0.1) maps to the upstream git tag v4.0.1; anything else
-# (native/latest/*-SNAPSHOT/no tag) falls back to master. We verify the tag
-# exists upstream before using it so a typo degrades to a visible master build
-# instead of a hard clone failure.
+# (native/latest/*-SNAPSHOT/no tag) builds master, the documented moving ref.
+# An explicit semver whose upstream git tag does not exist is a hard error:
+# building master and labelling the result with the requested version would
+# violate the tag-as-source-of-truth contract.
 derive_sidecar_ref() {
     local image="$1"
     local tag="${image##*:}"
+    local refs
 
     # No ':' in the ref (or ends with '/') means no explicit tag.
     if [ "$tag" = "$image" ]; then
@@ -28,11 +30,19 @@ derive_sidecar_ref() {
     fi
 
     if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        if git ls-remote --tags "$SIDECAR_REPO" "refs/tags/v${tag}" 2>/dev/null | grep -q .; then
-            printf 'v%s' "$tag"
-            return 0
+        # A failed query (offline, unreachable) must not be reported as "tag
+        # does not exist": only an empty, successful listing proves absence.
+        if ! refs="$(git ls-remote --tags "$SIDECAR_REPO" "refs/tags/v${tag}" 2>/dev/null)"; then
+            ui_error "Could not query the upstream tags of ${SIDECAR_REPO} (offline or unreachable); cannot verify that v${tag} exists."
+            exit 1
         fi
-        ui_warn "git tag v${tag} not found upstream; falling back to master"
+        if [[ -z "${refs}" ]]; then
+            ui_error "Image tag ${tag} requires upstream git tag v${tag}, which does not exist;"
+            ui_error "refusing to build master and label it ${tag}. Fix FOLIO_MODULE_SIDECAR_IMAGE."
+            exit 1
+        fi
+        printf 'v%s' "$tag"
+        return 0
     fi
     printf 'master'
 }
@@ -76,20 +86,33 @@ else
     CONTAINER_BUILD=false
 fi
 
-# The native profile in pom.xml already contains all necessary workarounds; just
-# run the standard native build. Its huge mvn/Mandrel log is folded under the
-# ui_run spinner (live elapsed instead of "please wait"); on failure only the last
-# 40 lines are shown, with the full log kept on disk (UI_RUN_TAIL_LINES).
+# start.sh exports docker/.env (set -a), so SECRET_STORE_* -- including a real
+# Vault token -- reach this shell and would override the sidecar's EPHEMERAL
+# test store if tests ever run. Nothing in this build needs them. This unset is
+# hygiene, not a full guard: other docker/.env names (KC_SERVICE_CLIENT_ID,
+# KC_LOGIN_CLIENT_SUFFIX, ...) can still override sidecar test config, so the
+# skip flags below are the durable protection.
+for var in $(env | sed -n 's/^\(SECRET_STORE_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    unset "$var"
+done
+
+# Skip all test phases: failsafe honors only -DskipITs (it ignores -DskipTests)
+# and the sidecar pom wires surefire's skip to skipSurefireTests; -DskipTests
+# stays for older refs with standard wiring. These flags are the real guard:
+# host env leaked from docker/.env can override sidecar test config beyond
+# SECRET_STORE_*. The huge mvn/Mandrel log is folded under the ui_run spinner
+# (live elapsed instead of "please wait"); on failure only the last 40 lines are
+# shown, with the full log kept on disk (UI_RUN_TAIL_LINES).
 BUILD_RESULT=0
 if [ "$CONTAINER_BUILD" = true ]; then
     UI_RUN_TAIL_LINES=40 ui_run 'building native sidecar (Mandrel container, ~5-10 min)' \
-        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -q \
+        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -DskipSurefireTests -DskipITs -q \
         -Dquarkus.native.container-build=true \
         -Dquarkus.native.builder-image=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25 \
         || BUILD_RESULT=$?
 else
     UI_RUN_TAIL_LINES=40 ui_run 'building native sidecar (local GraalVM, ~5-10 min)' \
-        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -q \
+        mvn clean install -Pnative -Dcheckstyle.skip -DskipTests -DskipSurefireTests -DskipITs -q \
         || BUILD_RESULT=$?
 fi
 

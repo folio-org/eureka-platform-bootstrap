@@ -14,6 +14,9 @@
 x-gateway-env: &gateway-env
   APIGW_TYPE: kong
   APIGW_URL: http://api-gateway:8001
+  # Transition alias: mgr images built before the APIGW rename (EUREKA-887) read only
+  # KONG_ADMIN_URL. Remove once warm caches are expected to hold post-rename images.
+  KONG_ADMIN_URL: http://api-gateway:8001
 
 services:
   api-gateway:
@@ -42,6 +45,8 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
       KONG_ADMIN_LISTEN: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+      # Docker DNS TTLs outlive recreated containers during warm starts.
+      KONG_DNS_VALID_TTL: "5"
       KONG_PLUGINS: bundled
       KONG_LOG_LEVEL: debug
       ENV: local

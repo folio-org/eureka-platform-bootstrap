@@ -1,0 +1,519 @@
+#!/usr/bin/env bash
+#
+# Hermetic proof for the gateway recovery wiring in misc/lib/docker-health.sh:
+#   - a health-wait timeout on api-gateway triggers exactly ONE recovery attempt
+#     and continues the wait with a fresh window (bounded: no retry loop)
+#   - the run fails when recovery does not help, and succeeds when it does
+#   - a timeout on an unrelated service never triggers gateway surgery
+#   - dump_failure_diagnostics points at the in-container fix when a container
+#     log reports "Kong is already running" (stale PID state)
+#
+# No real Docker: docker, curl, and sleep are stubbed on PATH.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+
+stub_bin="$(mktemp -d)"
+stdout_file="$(mktemp)"
+stderr_file="$(mktemp)"
+marker_file="$(mktemp)"
+trap 'rm -rf "${stub_bin}" "${stdout_file}" "${stderr_file}" "${marker_file}"' EXIT
+
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+marker="${RECOVERY_MARKER_FILE:?}"
+case "$*" in
+  'ps -aq --filter label=com.docker.compose.project=recovery-project --filter status=exited --filter status=dead')
+    ;;
+  ps\ -q\ --filter\ label=com.docker.compose.project=recovery-project)
+    if [[ -n "${HEALTH_PS_FAILS_AFTER:-}" ]]; then
+      count_file="${HEALTH_PS_COUNT_FILE:?}"
+      n="$(cat "${count_file}" 2>/dev/null || printf '0')"
+      n=$((n + 1))
+      printf '%s' "${n}" >"${count_file}"
+      if [[ "${n}" -gt "${HEALTH_PS_FAILS_AFTER}" ]]; then
+        printf 'Cannot connect to the Docker daemon\n' >&2
+        exit 1
+      fi
+    fi
+    printf 'cid1\ncid2\n'
+    ;;
+  inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
+    ;;
+  inspect\ --format\ \{\{if\ .State.Health\}\}*)
+    cid="${!#}"
+    case "${cid}" in
+      cid1) printf '/svc1 healthy\n' ;;
+      cid2)
+        if [[ -s "${marker}" && "${RECOVERY_FIXES:-true}" == true ]]; then
+          printf '%s healthy\n' "${STUCK_NAME:-api-gateway}"
+        else
+          printf '%s unhealthy\n' "${STUCK_NAME:-api-gateway}"
+        fi
+        ;;
+    esac
+    ;;
+  'inspect --format {{.State.Status}} api-gateway')
+    printf 'running\n'
+    ;;
+  exec\ api-gateway*)
+    printf 'exec\n' >>"${marker}"
+    ;;
+  'restart api-gateway')
+    printf 'restart\n' >>"${marker}"
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+cat >"${stub_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+# Admin API probe never answers inside the hermetic run; args are logged so
+# cases can assert what the probe sent.
+printf '%s\n' "$*" >> "${CURL_ARGS_LOG:-/dev/null}"
+printf '000'
+EOF
+chmod +x "${stub_bin}/curl"
+
+cat >"${stub_bin}/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${stub_bin}/sleep"
+
+run_health_wait() {
+  set +e
+  (
+    set -euo pipefail
+    cd "${PROJECT_ROOT}"
+    PATH="${stub_bin}:${PATH}"
+    export RECOVERY_MARKER_FILE="${marker_file}" RECOVERY_FIXES STUCK_NAME
+    export APIGW_TYPE="${APIGW_TYPE:-}" HEALTH_PS_FAILS_AFTER="${HEALTH_PS_FAILS_AFTER:-}" \
+      HEALTH_PS_COUNT_FILE="${HEALTH_PS_COUNT_FILE:-/dev/null}"
+    export HEALTH_WAIT_TIMEOUT_SECONDS=8
+    COMPOSE_PROJECT_NAME=recovery-project
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+    wait_for_all_healthy
+  ) >"${stdout_file}" 2>"${stderr_file}"
+  run_status=$?
+  set -e
+}
+
+recovery_count() {
+  [[ -f "${marker_file}" ]] && wc -l <"${marker_file}" | tr -d ' ' || printf '0'
+}
+
+# Case 1: gateway stuck, recovery does not help -> one recovery attempt, then
+# the wait fails on the second timeout without retrying.
+: >"${marker_file}"
+RECOVERY_FIXES=false STUCK_NAME=api-gateway run_health_wait
+[[ ${run_status} -ne 0 ]] || fail "health wait succeeded although recovery did not help"
+[[ "$(recovery_count)" == '1' ]] \
+  || { cat "${stderr_file}" >&2; fail "expected exactly one recovery attempt, got '$(recovery_count)'"; }
+grep -q 'Timed out waiting for containers to become healthy' "${stderr_file}" \
+  || fail 'health wait did not report the timeout'
+grep -q 'attempting recovery' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'gateway recovery was not attempted on the timeout path'; }
+
+# Case 2: gateway stuck, recovery helps -> recovery runs once and the wait
+# continues to a healthy finish.
+: >"${marker_file}"
+RECOVERY_FIXES=true STUCK_NAME=api-gateway run_health_wait
+[[ ${run_status} -eq 0 ]] || { cat "${stderr_file}" >&2; fail "health wait failed although recovery helped"; }
+[[ "$(recovery_count)" == '1' ]] \
+  || { cat "${stderr_file}" >&2; fail "expected exactly one recovery attempt, got '$(recovery_count)'"; }
+grep -q 'Container health ready' "${stderr_file}" \
+  || fail 'health wait did not report readiness after recovery'
+
+# Case 3: an unrelated service times out -> no gateway surgery at all.
+: >"${marker_file}"
+RECOVERY_FIXES=false STUCK_NAME=other-service run_health_wait
+[[ ${run_status} -ne 0 ]] || fail "health wait succeeded although other-service stayed unhealthy"
+[[ "$(recovery_count)" == '0' ]] \
+  || fail "recovery was invoked for a non-gateway timeout"
+[[ ! -s "${stdout_file}" ]] || { sed 's/^/stdout: /' "${stdout_file}" >&2; fail 'health wait wrote to stdout'; }
+
+# Case 4: APISIX gateway stuck while running -> recovery restarts the container
+# (the kong in-place migrations do not apply) and the wait completes. The admin
+# probe must carry the configured APISIX_ADMIN_KEY — the flow loads it from
+# docker/.env, an empty key would disable both recovery and the route guard.
+: >"${marker_file}"
+curl_args_log="$(mktemp)"
+: >"${curl_args_log}"
+export CURL_ARGS_LOG="${curl_args_log}" APISIX_ADMIN_KEY=test-admin-key
+APIGW_TYPE=apisix RECOVERY_FIXES=true STUCK_NAME=api-gateway run_health_wait
+unset APIGW_TYPE CURL_ARGS_LOG APISIX_ADMIN_KEY
+[[ ${run_status} -eq 0 ]] || { cat "${stderr_file}" >&2; fail "health wait failed although apisix restart helped"; }
+[[ "$(recovery_count)" == '1' ]] \
+  || { cat "${stderr_file}" >&2; fail "expected exactly one apisix restart, got '$(recovery_count)'"; }
+grep -q 'restart' "${marker_file}" \
+  || { cat "${marker_file}" >&2; fail 'apisix recovery did not restart the container'; }
+grep -q 'X-API-KEY: test-admin-key' "${curl_args_log}" 2>/dev/null \
+  || { cat "${stderr_file}" >&2; fail 'apisix recovery probe did not send the configured admin key'; }
+rm -f "${curl_args_log}"
+
+# Case 5: the Docker daemon dies mid-wait -> the wait fails loudly instead of
+# reading an empty container list as "all healthy".
+: >"${marker_file}"
+ps_count_file="$(mktemp)"
+printf '0' >"${ps_count_file}"
+RECOVERY_FIXES=true STUCK_NAME=api-gateway \
+  HEALTH_PS_FAILS_AFTER=1 HEALTH_PS_COUNT_FILE="${ps_count_file}" run_health_wait
+unset HEALTH_PS_FAILS_AFTER
+rm -f "${ps_count_file}"
+[[ ${run_status} -ne 0 ]] || fail "daemon death mid-wait was reported as success"
+grep -q 'Lost contact with the Docker daemon' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'daemon death mid-wait was not reported'; }
+if grep -q 'Container health ready' "${stderr_file}"; then
+  cat "${stderr_file}" >&2
+  fail 'daemon death mid-wait still reported healthy readiness'
+fi
+[[ "$(recovery_count)" == '0' ]] \
+  || fail 'recovery ran although the daemon was gone'
+
+# Case 6: failure diagnostics detect the stale-Kong-PID log line and print the
+# repo's own in-container fix.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=kong-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\napi-gateway\tUp 5 minutes (unhealthy)'
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=kong-project')
+    printf 'cid1\n'
+    ;;
+  inspect\ --format\ \{\{.Id\}\}*)
+    printf 'cid1|running|unhealthy|1|\n'
+    ;;
+  'inspect --format {{.Name}} cid1')
+    printf '/api-gateway\n'
+    ;;
+  'logs --tail 200 cid1')
+    printf 'Error: Kong is already running in /usr/local/kong\n'
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+: >"${stdout_file}"
+: >"${stderr_file}"
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=kong-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  dump_failure_diagnostics
+) >"${stdout_file}" 2>"${stderr_file}"
+[[ ! -s "${stdout_file}" ]] || fail 'failure diagnostics wrote to stdout'
+grep -q 'Fix the reported cause' "${stderr_file}" \
+  || fail 'diagnostics must explain that rerun depends on fixing the cause'
+grep -q 'same gateway and sidecar options' "${stderr_file}" \
+  || fail 'diagnostics must preserve runtime choices during recovery'
+if grep -q 'every step is idempotent' "${stderr_file}"; then
+  fail 'diagnostics must not promise unconditional recovery'
+fi
+grep -q 'already running in /usr/local/kong' "${stderr_file}" \
+  || fail 'diagnostics did not show the stale-Kong log line'
+grep -q 'rm -f /usr/local/kong/pids/nginx.pid' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'diagnostics did not print the in-container fix command'; }
+grep -q 'rerun ./start.sh after ./stop.sh' "${stderr_file}" \
+  || fail 'diagnostics did not print the stop/start alternative'
+
+# Case 7: diagnostics surface a container's ERROR lines above graceful-shutdown
+# noise, and the memory hint stays gated on OOM evidence (exit 137 / OOMKilled)
+# instead of firing on any failure.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=diag-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\n%s\tExited (%s)\n' "${DIAG_NAME:-mgr-applications}" "${DIAG_EXIT:-1}"
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=diag-project')
+    printf 'cid1\n'
+    ;;
+  inspect\ --format\ \{\{.Id\}\}*)
+    printf 'cid1|exited||%s|%s\n' "${DIAG_EXIT:-1}" "${DIAG_OOM:-}"
+    ;;
+  'inspect --format {{.Name}} cid1')
+    printf '/%s\n' "${DIAG_NAME:-mgr-applications}"
+    ;;
+  'logs --tail 200 cid1')
+    case "${DIAG_LOG_MODE:-default}" in
+      long-error)
+        for n in 1 2 3 4 5 6 7 8 9 10; do
+          printf 'ERROR long failure %090d diagnostic-error-suffix-%s\n' 0 "${n}"
+        done
+        ;;
+      fallback)
+        for n in 1 2 3 4 5 6 7 8; do
+          printf 'Plain startup log %090d diagnostic-fallback-suffix-%s\n' 0 "${n}"
+        done
+        ;;
+      *)
+        printf 'Starting MgrApplication...\nShutting down ExecutorService\nStopping beans in phase\nERROR Application run failed\njava.net.URIcannot be null\n'
+        ;;
+    esac
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+run_diagnostics() {  # sets run_status, stdout_file, stderr_file
+  set +e
+  (
+    cd "${PROJECT_ROOT}"
+    PATH="${stub_bin}:${PATH}"
+    COMPOSE_PROJECT_NAME=diag-project
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+    dump_failure_diagnostics
+  ) >"${stdout_file}" 2>"${stderr_file}"
+  run_status=$?
+  set -e
+}
+
+DIAG_EXIT=1 run_diagnostics
+[[ ${run_status} -eq 0 ]] || fail 'diagnostics snapshot failed'
+[[ ! -s "${stdout_file}" ]] || fail 'failure diagnostics wrote to stdout'
+grep -q 'ERROR Application run failed' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'error line did not surface above shutdown noise'; }
+grep -q 'Starting MgrApplication' "${stderr_file}" \
+  && fail 'unmatched shutdown noise leaked into the snapshot'
+if grep -q 'Raise Docker memory' "${stderr_file}"; then
+  fail 'memory hint raised without OOM evidence'
+fi
+
+DIAG_EXIT=137 DIAG_OOM=OOMKilled run_diagnostics
+grep -q 'Raise Docker memory' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'OOMKilled evidence did not raise the memory hint'; }
+
+# Long lines retain their useful suffix; only the number of lines is bounded.
+DIAG_LOG_MODE=long-error run_diagnostics
+grep -q 'diagnostic-error-suffix-8$' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'diagnostics truncated a long error line'; }
+[[ "$(grep -c 'diagnostic-error-suffix-' "${stderr_file}")" -eq 8 ]] \
+  || fail 'diagnostics did not retain exactly eight matching error lines'
+DIAG_LOG_MODE=fallback run_diagnostics
+grep -q 'diagnostic-fallback-suffix-3$' "${stderr_file}" \
+  || { cat "${stderr_file}" >&2; fail 'diagnostics truncated a long fallback line'; }
+[[ "$(grep -c 'diagnostic-fallback-suffix-' "${stderr_file}")" -eq 6 ]] \
+  || fail 'diagnostics did not retain exactly six fallback lines'
+[[ ! -s "${stdout_file}" ]] || fail 'long failure diagnostics wrote to stdout'
+if LC_ALL=C grep -q "$(printf '\033')" "${stderr_file}"; then
+  fail 'piped failure diagnostics contain ANSI escapes'
+fi
+
+# Case 8: a failure before any container exists explains that, and carries the
+# failing phase/step markers set by the UI layer.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'ps -a --filter label=com.docker.compose.project=empty-project --format table {{.Names}}\t{{.Status}}')
+    printf 'NAMES\tSTATUS\n'
+    ;;
+  'ps -aq --filter label=com.docker.compose.project=empty-project')
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+set +e
+(
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=empty-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  # Production keeps the failure markers in the same process as the dump; set
+  # them after the sources because ui.sh initializes them to empty.
+  UI_FAILED_PHASE='Prepare config'
+  UI_FAILED_STEP='preparing support images'
+  dump_failure_diagnostics
+) >"${stdout_file}" 2>"${stderr_file}"
+run_status=$?
+set -e
+[[ ${run_status} -eq 0 ]] || fail 'empty diagnostics failed'
+[[ ! -s "${stdout_file}" ]] || fail 'empty failure diagnostics wrote to stdout'
+grep -q 'No compose containers were created before the failure.' "${stderr_file}" \
+  || { sed 's/^/stderr: /' "${stderr_file}" >&2; fail 'empty diagnostics did not explain missing containers'; }
+grep -q 'Failed phase: Prepare config' "${stderr_file}" \
+  || fail 'empty diagnostics did not include failed phase'
+grep -q 'Failed step: preparing support images' "${stderr_file}" \
+  || fail 'empty diagnostics did not include failed step'
+
+# Case 9: the health wait is scoped to this compose project. The UNFILTERED
+# `docker ps -q` stub answer includes a foreign project's unhealthy container;
+# if the health loop ever drops the project filter, that container enters the
+# unhealthy set and the wait can never complete.
+cat >"${stub_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  ps\ -aq\ --filter\ label=com.docker.compose.project=scoped-project\ --filter\ status=exited\ --filter\ status=dead)
+    ;;
+  ps\ -q\ --filter\ label=com.docker.compose.project=scoped-project)
+    printf 'cid1\ncid2\n'
+    ;;
+  'ps -q')
+    printf 'cid1\ncid2\ncid_foreign\n'
+    ;;
+  inspect\ --format\ \{\{if\ .Config.Healthcheck\}\}*)
+    ;;
+  inspect\ --format\ \{\{if\ .State.Health\}\}*)
+    case "${!#}" in
+      cid_foreign) printf '/foreign-service unhealthy\n' ;;
+      cid1) printf '/svc1 healthy\n' ;;
+      *) printf '/svc2 healthy\n' ;;
+    esac
+    ;;
+  *)
+    printf 'unexpected docker call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+EOF
+chmod +x "${stub_bin}/docker"
+
+: >"${stdout_file}"
+: >"${stderr_file}"
+if ! (
+  cd "${PROJECT_ROOT}"
+  PATH="${stub_bin}:${PATH}"
+  COMPOSE_PROJECT_NAME=scoped-project
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  wait_for_all_healthy
+) >"${stdout_file}" 2>"${stderr_file}"; then
+  sed 's/^/stderr: /' "${stderr_file}" >&2
+  fail 'scoped health wait failed although project containers were healthy'
+fi
+[[ ! -s "${stdout_file}" ]] || fail 'scoped health wait wrote to stdout'
+if grep -q 'foreign-service' "${stderr_file}"; then
+  sed 's/^/stderr: /' "${stderr_file}" >&2
+  fail 'health wait consulted a container outside the compose project'
+fi
+
+# Measured time includes slow probes and both health windows. Clock advances in
+# same-shell sleep/recovery stubs do not change the polling attempt budget.
+REAL_SLEEP="$(command -v sleep)"
+(
+  source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
+  source "${PROJECT_ROOT}/misc/lib/docker-health.sh"
+  COMPOSE_PROJECT_NAME=timed-project
+  HEALTH_WAIT_TIMEOUT_SECONDS=2
+
+  assert_duration_at_least() {
+    local message="$1" minimum="$2" measured
+    measured="$(sed -n "s/.*${message} (\([0-9][0-9]*\)s).*/\1/p" "${stderr_file}" | tail -n 1)"
+    [[ -n "${measured}" && "${measured}" -ge "${minimum}" ]] \
+      || { cat "${stderr_file}" >&2; fail "${message} excluded elapsed probe/recovery time"; }
+  }
+
+  curl() { "${REAL_SLEEP}" 1; printf '200'; }
+  wait_for_http_ready 'http://test/' 'Slow HTTP' 200 2 >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Slow HTTP responding HTTP 200' 1
+
+  timed_sleeps=0
+  sleep() { SECONDS=$((SECONDS + 4)); timed_sleeps=$((timed_sleeps + 1)); }
+  curl() { "${REAL_SLEEP}" 1; printf '503'; }
+  ui_progress() { printf 'progress:%s\n' "$3" >&2; }
+  if wait_for_http_ready 'http://test/' 'Slow HTTP' 200 2 >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'HTTP timeout succeeded'
+  fi
+  assert_duration_at_least 'Slow HTTP did not become ready' 5
+  [[ "${timed_sleeps}" -eq 1 ]] || fail 'HTTP timing changed the retry budget'
+  grep -Eq 'progress:[1-9][0-9]*$' "${stderr_file}" || fail 'HTTP progress excluded probe time'
+
+  : >"${marker_file}"
+  docker() {
+    case "$1 $2" in
+      'ps -aq')
+        if [[ ! -s "${marker_file}" ]]; then
+          "${REAL_SLEEP}" 1
+          printf 'baseline\n' >"${marker_file}"
+        fi
+        ;;
+      'ps -q') printf 'cid1\n' ;;
+      'inspect --format') "${REAL_SLEEP}" 1; printf '/svc1 healthy\n' ;;
+      *) fail "unexpected timed Docker call: $*" ;;
+    esac
+  }
+  wait_for_all_healthy >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Container health ready' 2
+
+  docker() {
+    case "$1 $2" in
+      'ps -aq') "${REAL_SLEEP}" 1 ;;
+      'ps -q') return 1 ;;
+      *) fail "unexpected failed Docker call: $*" ;;
+    esac
+  }
+  if ( wait_for_all_healthy ) >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'unavailable Docker daemon was reported as ready'
+  fi
+  assert_duration_at_least 'Container health failed' 1
+
+  timed_sleeps=0 timed_recoveries=0 timed_recovery_helps=true
+  docker() {
+    case "$1 $2" in
+      'ps -aq') ;;
+      'ps -q') printf 'cid1\n' ;;
+      'inspect --format')
+        if [[ "${timed_recovery_helps}" == true && "${timed_sleeps}" -ge 2 ]]; then
+          printf '/api-gateway healthy\n'
+        else
+          printf '/api-gateway unhealthy\n'
+        fi
+        ;;
+      *) fail "unexpected recovery Docker call: $*" ;;
+    esac
+  }
+  recover_api_gateway_if_needed() {
+    SECONDS=$((SECONDS + 3))
+    timed_recoveries=$((timed_recoveries + 1))
+  }
+  wait_for_all_healthy >"${stdout_file}" 2>"${stderr_file}"
+  assert_duration_at_least 'Container health ready' 11
+  [[ "${timed_recoveries}" -eq 1 && "${timed_sleeps}" -eq 2 ]] \
+    || fail 'health timing changed the single-recovery/two-window budget'
+
+  timed_sleeps=0 timed_recoveries=0 timed_recovery_helps=false
+  if ( wait_for_all_healthy ) >"${stdout_file}" 2>"${stderr_file}"; then
+    fail 'health wait succeeded after ineffective recovery'
+  fi
+  assert_duration_at_least 'Container health timed out' 11
+  [[ ! -s "${stdout_file}" ]] || fail 'timed health waits wrote to stdout'
+)
+
+printf 'ok  health recovery, measured wait durations, and complete bounded diagnostics\n'

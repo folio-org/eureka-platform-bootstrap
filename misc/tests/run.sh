@@ -80,34 +80,12 @@ else
 fi
 
 echo "==> Shell functional tests"
-shell_tests=(
-  misc/tests/test-bootstrap-create-user-gateway.sh
-  misc/tests/test-build-images-effective-sidecar.sh
-  misc/tests/test-build-images-effective-module-override.sh
-  misc/tests/test-build-images-vault-decision.sh
-  misc/tests/test-create-user-host-gateway.sh
-  misc/tests/test-create-user-idempotent.sh
-  misc/tests/test-native-sidecar-effective-tag.sh
-  misc/tests/test-preflight-host.sh
-  misc/tests/test-sidecar-resources.sh
-  misc/tests/test-build-images-failure.sh
-  misc/tests/test-native-sidecar-not-in-arm-queue.sh
-  misc/tests/test-image-freshness.sh
-  misc/tests/test-vault-token.sh
-  misc/tests/test-credentials-initialization.sh
-  misc/tests/test-config-precedence.sh
-  misc/tests/test-start-fixed-bootstrap-scope.sh
-  misc/tests/test-start-descriptor-path-override.sh
-  misc/tests/test-descriptor-image-skew.sh
-  misc/tests/test-ui-stream-contract.sh
-  misc/tests/test-ui-spin-frame.sh
-  misc/tests/test-ui-run-errexit-restore.sh
-  misc/tests/test-ui-run-tail.sh
-  misc/tests/test-ui-capture-contract.sh
-  misc/tests/test-stop-output.sh
-  misc/tests/test-stop-profile-activation.sh
-  misc/tests/test-native-compose-surface.sh
-)
+# Convention-based discovery: every misc/tests/test-*.sh runs standalone and
+# exits non-zero on failure, so the runner needs no hand-maintained list.
+shell_tests=()
+while IFS= read -r target; do
+  shell_tests+=("${target}")
+done < <(ls misc/tests/test-*.sh | sort)
 for target in "${shell_tests[@]}"; do
   if bash "${target}"; then
     echo "  ok  ${target}"

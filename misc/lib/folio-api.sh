@@ -8,7 +8,6 @@
 #
 # Relies on globals set by the bootstrap flow: APP_NAME, APP_ID,
 # APP_DESCRIPTOR_PATH, APP_DISCOVERY_PATH, SECRET_STORE_VAULT_TOKEN.
-# Requires the output helpers from folio-common.sh (step/ok/warn).
 
 [[ -n "${_FOLIO_API_SOURCED:-}" ]] && return 0
 readonly _FOLIO_API_SOURCED=1
@@ -158,6 +157,94 @@ obtain_tenant_access_token() {
 # Registration
 ################################################################################
 
+# Host-side admin endpoints of the two supported gateways. Both ports are
+# published by their compose files; the container-internal APIGW_URL is not
+# reachable from the bootstrap shell.
+KONG_ADMIN_URL="${KONG_ADMIN_URL:-http://localhost:8001}"
+APISIX_ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
+
+# Print the module service names registered in the active gateway's admin API.
+# Both gateways name module services by module id (e.g. mod-users-19.6.0), so
+# the application's discovery ids match either store as-is. Returns non-zero
+# when the admin API does not answer HTTP 200 (nothing is printed then).
+gateway_module_service_names() {
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    api_request GET "${APISIX_ADMIN_URL}/apisix/admin/services" \
+      --header "X-API-KEY: ${APISIX_ADMIN_KEY:-}"
+    [[ "${API_RESPONSE_CODE}" == 200 ]] || return 1
+    # APISIX 3.x admin list shape: {"total":N,"list":[{"value":{"name":...}}]}
+    printf '%s' "${API_RESPONSE_BODY}" | jq -r '.list[]?.value.name? // empty'
+  else
+    api_request GET "${KONG_ADMIN_URL}/services"
+    [[ "${API_RESPONSE_CODE}" == 200 ]] || return 1
+    printf '%s' "${API_RESPONSE_BODY}" | jq -r '.data[]?.name? // empty'
+  fi
+}
+
+# Check the enabled version, not the target version awaiting entitlement.
+# Unavailable admin API keeps the existing fail-open behavior. An empty or
+# foreign-only service store proves route loss; unreadable metadata does not.
+application_routable_in_gateway() {
+  local enabled_descriptor="$1" system_access_token="$2"
+  local names_file module_id module_ids enabled_id
+  local module_ids_filter='[.modules[]? | (.id // (if (.name | type) == "string" and (.version | type) == "string" then .name + "-" + .version else null end))] | select(length > 0 and all(.[]; type == "string" and length > 0)) | .[]'
+  names_file="$(mktemp)"
+  if ! ( gateway_module_service_names ) > "${names_file}"; then
+    rm -f "${names_file}"
+    return 0
+  fi
+  if [[ ! -s "${names_file}" ]]; then
+    rm -f "${names_file}"
+    return 1
+  fi
+
+  enabled_id="$(printf '%s' "${enabled_descriptor}" | jq -r '.id // .applicationId')"
+  if ! module_ids="$(printf '%s' "${enabled_descriptor}" | jq -er "${module_ids_filter}" 2>/dev/null)"; then
+    # Older API responses can carry only application ids. Current ids use the
+    # local discovery; an older id needs its own descriptor for correct matching.
+    if [[ "${enabled_id}" == "${APP_ID}" ]]; then
+      if ! module_ids="$(jq -er '[.discovery[].id] | select(length > 0 and all(.[]; type == "string" and length > 0)) | .[]' "${APP_DISCOVERY_PATH}" 2>/dev/null)"; then
+        rm -f "${names_file}"
+        ui_error "Cannot verify gateway routes for enabled application ${enabled_id}: local discovery is invalid."
+        exit 1
+      fi
+    else
+      api_request GET "${GW_URL}/applications/${enabled_id}" \
+        --header "x-okapi-token: ${system_access_token}"
+      if [[ "${API_RESPONSE_CODE}" -lt 200 || "${API_RESPONSE_CODE}" -ge 300 ]] \
+        || ! module_ids="$(printf '%s' "${API_RESPONSE_BODY}" | jq -er --arg id "${enabled_id}" "select(.id == \$id) | ${module_ids_filter}" 2>/dev/null)"; then
+        rm -f "${names_file}"
+        ui_error "Cannot verify gateway routes for enabled application ${enabled_id}: its module metadata is unavailable or invalid."
+        exit 1
+      fi
+    fi
+  fi
+
+  while IFS= read -r module_id; do
+    if grep -Fxq "${module_id}" "${names_file}"; then
+      rm -f "${names_file}"
+      return 0
+    fi
+  done <<<"${module_ids}"
+  rm -f "${names_file}"
+  return 1
+}
+
+# Entitlement creates module services/routes in the gateway's own store. A kept
+# entitlement with a lost store must not be treated as a healthy warm run.
+halt_on_gateway_without_module_routes() {
+  ui_error "Application ${APP_NAME} is enabled for tenant 'diku', but this ${APIGW_TYPE:-kong} gateway has none of its module routes."
+  ui_info '  Skipping entitlement or upgrading cannot reliably restore these routes.'
+  ui_info '  Recovery options:'
+  ui_info '    1. Clean switch: ./stop.sh and confirm removing volumes, then ./start.sh [--apisix].'
+  if [[ "${APIGW_TYPE:-kong}" == "apisix" ]]; then
+    ui_info '    2. Switch back to the previous gateway: rerun ./start.sh (Kong is the default).'
+  else
+    ui_info '    2. Switch back to the previous gateway: rerun ./start.sh --apisix.'
+  fi
+  exit 1
+}
+
 register_application_descriptor() {
   local system_access_token="$1"
   local max_retries=3 retry_count=0 registration_success=false
@@ -189,15 +276,65 @@ register_application_descriptor() {
     else
       ui_error "Request failed with HTTP code ${API_RESPONSE_CODE}:"
       print_api_payload "$API_RESPONSE_BODY" stderr
+      if [[ "$API_RESPONSE_CODE" -eq 404 ]]; then
+        ui_info "Check the ${APIGW_TYPE:-kong} gateway route to mgr-applications."
+        ui_info 'If that route is missing, ./stop.sh --yes then ./start.sh with the same gateway and sidecar options can retry manager registration, keeping volumes.'
+        ui_info 'Module routes require separate recovery; restarting managers does not restore them.'
+      fi
       exit 1
     fi
   done
 
   if [[ "$registration_success" == false ]]; then
     ui_error "Failed to register application descriptor after ${max_retries} attempts."
-    ui_info 'This usually indicates Kong cannot resolve mgr-applications via DNS.'
+    ui_info 'This usually indicates the API gateway cannot resolve mgr-applications via DNS.'
     exit 1
   fi
+}
+
+# Bulk discovery registration is the fast path for a clean bootstrap, but on a
+# warm stack the batch mixes already-registered module ids with new ones (e.g.
+# after --actualize bumped module versions) and the bulk endpoint rejects the
+# whole batch with 409. Register module-by-module then: 409 per module is a
+# benign skip, a 503/504 gets one bounded retry (same gateway warm-up window as
+# the bulk path), anything else is a real failure. Without this the entitlement
+# flow cancels over undiscovered modules (observed live: warm --actualize run
+# died at "Entitlement failed" with only the flow initializer stage finished).
+register_missing_module_discoveries() {
+  local system_access_token="$1"
+  local entry module_id registered=0 skipped=0
+
+  while IFS= read -r entry; do
+    [[ -n "${entry}" ]] || continue
+    module_id="$(printf '%s' "${entry}" | jq -r '.id')"
+
+    api_request POST "${GW_URL}/modules/${module_id}/discovery" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "${entry}"
+
+    if [[ "$API_RESPONSE_CODE" == '503' || "$API_RESPONSE_CODE" == '504' ]]; then
+      ui_warn "Discovery registration for ${module_id} temporarily unavailable (HTTP ${API_RESPONSE_CODE}); retrying once in 15s..."
+      sleep 15
+      api_request POST "${GW_URL}/modules/${module_id}/discovery" \
+        --header 'Content-Type: application/json' \
+        --header "x-okapi-token: ${system_access_token}" \
+        --data "${entry}"
+    fi
+
+    if [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
+      registered=$((registered + 1))
+    elif [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
+      skipped=$((skipped + 1))
+    else
+      ui_warn "Discovery registration for ${module_id} failed with HTTP ${API_RESPONSE_CODE}:"
+      print_api_payload "$API_RESPONSE_BODY" stderr
+      return 1
+    fi
+  done < <(jq -c '.discovery[]' "${APP_DISCOVERY_PATH}")
+
+  ui_info "Discovery information ready: ${registered} module(s) registered, ${skipped} already present."
+  return 0
 }
 
 register_discovery_information() {
@@ -217,7 +354,12 @@ register_discovery_information() {
       --data "@${APP_DISCOVERY_PATH}"
 
     if [[ "$API_RESPONSE_CODE" -eq 409 ]]; then
-      print_api_notice 'Discovery information is already registered' "$API_RESPONSE_BODY"
+      # Warm stack: fall back to per-module registration so modules that are
+      # new since the last run still get their discovery registered.
+      if ! register_missing_module_discoveries "$system_access_token"; then
+        ui_error 'Failed to register discovery information after the per-module fallback.'
+        exit 1
+      fi
       discovery_success=true
       break
     elif [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
@@ -237,7 +379,7 @@ register_discovery_information() {
 
   if [[ "$discovery_success" == false ]]; then
     ui_error "Failed to register discovery information after ${max_retries} attempts."
-    ui_info 'This usually indicates Kong cannot resolve mgr-applications via DNS.'
+    ui_info 'This usually indicates the API gateway cannot resolve mgr-applications via DNS.'
     exit 1
   fi
 
@@ -251,14 +393,12 @@ register_discovery_information() {
 # Poll until the tenant has registered capabilities, refreshing the token when
 # it expires.
 wait_for_capabilities() {
-  local tenant_access_token cap_count elapsed_ms
+  local tenant_access_token cap_count wait_start=${SECONDS}
   local cap_wait=0 max_cap_wait=60
   local token_refreshes=0 max_token_refreshes=5
-  local si=0 spin_char
 
-  ui_timer_start capabilities_wait
   tenant_access_token="$(obtain_tenant_access_token diku)"
-  ui_activity_start 'Waiting for capabilities'
+  ui_step 'Waiting for capabilities'
   while [[ $cap_wait -lt $max_cap_wait ]]; do
     api_request GET "${GW_URL}/capabilities?limit=1" \
       --header 'Content-Type: application/json' \
@@ -268,40 +408,36 @@ wait_for_capabilities() {
     if [[ "$API_RESPONSE_CODE" == '401' || "$API_RESPONSE_CODE" == '403' ]]; then
       token_refreshes=$((token_refreshes + 1))
       if [[ $token_refreshes -gt $max_token_refreshes ]]; then
-        ui_activity_finish fail 'Capabilities token refresh failed' "$(ui_timer_read capabilities_wait 2>/dev/null || printf 0)"
+        ui_fail "Capabilities token refresh failed ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
         ui_warn "Capabilities check keeps returning HTTP ${API_RESPONSE_CODE} after ${max_token_refreshes} token refreshes; continuing."
         return 0
       fi
       sleep 2
       cap_wait=$((cap_wait + 2))
-      ui_spinner_clear
       tenant_access_token="$(obtain_tenant_access_token diku)"
       continue
     fi
 
     cap_count="$(extract_total_records_count "$API_RESPONSE_BODY")"
     if [[ "$cap_count" -gt 0 ]]; then
-      elapsed_ms="$(ui_timer_read capabilities_wait)"
-      ui_activity_finish ok "Capabilities registered (found ${cap_count})" "${elapsed_ms}"
+      ui_ok "Capabilities registered (found ${cap_count}) ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
       return 0
     fi
 
-    spin_char="$(_ui_spin_frame "$((si++))")"
-    ui_activity_tick "$spin_char" 'Waiting for capabilities' '' "$(ui_timer_read capabilities_wait)"
+    ui_progress 'Waiting for capabilities' '' "$(( SECONDS - wait_start ))"
     sleep 5
     cap_wait=$((cap_wait + 5))
   done
 
-  ui_activity_finish fail 'Capabilities not registered' "$(ui_timer_read capabilities_wait 2>/dev/null || printf 0)"
-  ui_warn "No capabilities found after ${max_cap_wait}s; the default user may lack permissions."
+  ui_fail "Capabilities not registered ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
+  ui_warn "No capabilities found after $(ui_fmt_seconds "$(( SECONDS - wait_start ))"); the default user may lack permissions."
 }
 
 create_tenant_and_enable_application() {
   local system_access_token="$1"
-  local diku_tenant_id entitlement_flow_id status existing_entitlement_count entitlement_finished=false
-  local entitlement_elapsed
-  local max_wait=120 elapsed=0
-  local si=0 spin_char
+  local diku_tenant_id entitlement_flow_id status enabled_descriptor entitlement_finished=false
+  local failed_stages same_name_entitlement_id
+  local max_wait=120 elapsed=0 wait_start
 
   ui_step "Creating tenant 'diku'"
   api_request POST "${GW_URL}/tenants" \
@@ -335,30 +471,55 @@ create_tenant_and_enable_application() {
     --header 'Content-Type: application/json' \
     --header 'x-okapi-tenant: diku' \
     --header "x-okapi-token: ${system_access_token}"
-  existing_entitlement_count="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r --arg id "${APP_ID}" 'if type == "array" then map(select(.id == $id or .applicationId == $id)) | length elif .applicationDescriptors? != null then [.applicationDescriptors[]? | select(.id == $id or .applicationId == $id)] | length elif .applications? != null then [.applications[]? | select(.id == $id or .applicationId == $id)] | length else 0 end')"
-
-  if [[ "${existing_entitlement_count}" -gt 0 ]]; then
-    ui_info "Application ${APP_NAME} is already enabled for tenant 'diku' (skipping entitlement)."
-    wait_for_capabilities
-    return 0
+  # Select once so later gateway/metadata probes cannot overwrite the decision.
+  # Unknown/error responses must not be mistaken for an empty entitlement list.
+  if [[ "${API_RESPONSE_CODE}" -lt 200 || "${API_RESPONSE_CODE}" -ge 300 ]] \
+    || ! enabled_descriptor="$(printf '%s' "${API_RESPONSE_BODY}" | jq -c --arg id "${APP_ID}" --arg prefix "${APP_NAME}-" '
+      (if type == "array" then . else .applicationDescriptors // .applications end)
+      | if type != "array" or any(.[]; type != "object" or ((.id // .applicationId) | type) != "string") then error("Invalid entitlement collection") else . end
+      | (map(select((.id // .applicationId) == $id))[0] // map(select((.id // .applicationId) | startswith($prefix)))[0] // empty)
+    ' 2>/dev/null)"; then
+    ui_error "Cannot determine enabled applications for tenant 'diku' (HTTP ${API_RESPONSE_CODE})."
+    exit 1
   fi
 
-  ui_step "Enabling (entitling) ${APP_NAME} for tenant 'diku'"
-  api_request POST "${GW_URL}/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true" \
-    --header 'Content-Type: application/json' \
-    --header "x-okapi-token: ${system_access_token}" \
-    --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  same_name_entitlement_id=''
+  if [[ -n "${enabled_descriptor}" ]]; then
+    same_name_entitlement_id="$(printf '%s' "${enabled_descriptor}" | jq -r '.id // .applicationId')"
+    if ! application_routable_in_gateway "${enabled_descriptor}" "${system_access_token}"; then
+      halt_on_gateway_without_module_routes
+    fi
+    if [[ "${same_name_entitlement_id}" == "${APP_ID}" ]]; then
+      ui_info "Application ${APP_NAME} is already enabled for tenant 'diku' (skipping entitlement)."
+      wait_for_capabilities
+      return 0
+    fi
+  fi
+
+  # A new version of an enabled application needs PUT upgrade, not POST entitle.
+  if [[ -n "${same_name_entitlement_id}" ]]; then
+    ui_step "Upgrading entitlement for ${APP_NAME} to the new version for tenant 'diku'"
+    api_request PUT "${GW_URL}/entitlements?async=true&tenantParameters=loadSample=true,loadReference=true" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  else
+    ui_step "Enabling (entitling) ${APP_NAME} for tenant 'diku'"
+    api_request POST "${GW_URL}/entitlements?ignoreErrors=false&async=true&tenantParameters=loadSample=true,loadReference=true" \
+      --header 'Content-Type: application/json' \
+      --header "x-okapi-token: ${system_access_token}" \
+      --data "{\"tenantId\": \"${diku_tenant_id}\", \"applications\": [ \"${APP_ID}\" ] }"
+  fi
 
   if [[ "$API_RESPONSE_CODE" -ge 200 && "$API_RESPONSE_CODE" -lt 300 ]]; then
     ui_ok 'Application enabled for tenant.'
     entitlement_flow_id="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '.flowId // empty')"
 
     if [[ -n "$entitlement_flow_id" ]]; then
-      ui_timer_start entitlement_wait
-      ui_activity_start 'Waiting for entitlement'
+      wait_start=${SECONDS}
+      ui_step 'Waiting for entitlement'
       while [[ $elapsed -lt $max_wait ]]; do
-        spin_char="$(_ui_spin_frame "$((si++))")"
-        ui_activity_tick "$spin_char" 'Waiting for entitlement' '' "$(ui_timer_read entitlement_wait)"
+        ui_progress 'Waiting for entitlement' '' "$(( SECONDS - wait_start ))"
         sleep 5
         elapsed=$((elapsed + 5))
 
@@ -369,24 +530,29 @@ create_tenant_and_enable_application() {
         status="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '.status // empty')"
 
         if [[ "$status" == 'finished' ]]; then
-          entitlement_elapsed="$(ui_timer_read entitlement_wait)"
-          ui_activity_finish ok 'Entitlement completed successfully' "${entitlement_elapsed}"
+          ui_ok "Entitlement completed successfully ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
           entitlement_finished=true
           break
         elif [[ "$status" == 'failed' || "$status" == 'cancelled' ]]; then
-          ui_activity_finish fail 'Entitlement failed' "$(ui_timer_read entitlement_wait 2>/dev/null || printf 0)"
+          ui_fail "Entitlement failed ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
           ui_error 'Entitlement failed:'
+          failed_stages="$(printf '%s\n' "$API_RESPONSE_BODY" | jq -r '[.stages[]? | select(.status != "finished") | "\(.type // "stage")=\(.status)"] | join(", ")' 2>/dev/null || true)"
+          if [[ -n "${failed_stages}" ]]; then
+            ui_error "Unfinished stages: ${failed_stages}"
+          else
+            ui_error 'Unfinished stages: see raw payload below'
+          fi
           print_api_payload "$API_RESPONSE_BODY" stderr
           exit 1
         fi
       done
 
       if [[ "${entitlement_finished}" != true && $elapsed -ge $max_wait ]]; then
-        ui_activity_finish fail 'Entitlement still in progress' "$(ui_timer_read entitlement_wait 2>/dev/null || printf 0)"
-        ui_warn "Entitlement still in progress after ${max_wait}s, continuing anyway..."
+        ui_fail "Entitlement still in progress ($(ui_fmt_seconds "$(( SECONDS - wait_start ))"))"
+        ui_warn "Entitlement still in progress after $(ui_fmt_seconds "$(( SECONDS - wait_start ))"), continuing anyway..."
       fi
     else
-      ui_note '  (Could not get entitlement ID, waiting 30s...)'
+      ui_info 'Could not get entitlement ID, waiting 30s...'
       sleep 30
     fi
 
@@ -445,11 +611,11 @@ smoke_check() {
   fi
 
   if [[ $failures -eq 0 ]]; then right_label='passed'; else right_label="${failures} failed"; fi
-  ui_box_top 'smoke check' "${right_label}"
+  ui_panel 'smoke check' "${right_label}"
   for idx in "${!states[@]}"; do
-    ui_box_status_row "${states[$idx]}" "${texts[$idx]}" "${rights[$idx]}"
+    ui_panel_check "${states[$idx]}" "${texts[$idx]}" "${rights[$idx]}"
   done
-  ui_box_bottom
+  ui_panel_end
 
   [[ $failures -eq 0 ]] && return 0
   return 1

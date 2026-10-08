@@ -10,10 +10,11 @@
 # This script is intentionally thin: it parses arguments, asks a couple of
 # questions, checks tools, and runs the bootstrap flow. The actual logic lives in
 # focused libraries:
-#   misc/lib/folio-common.sh   logging, config loading, output helpers
-#   misc/lib/folio-api.sh      tokens, registration, entitlement, smoke check
-#   misc/lib/docker-health.sh  container / route readiness waits
-#   misc/bootstrap-engine.sh   phase orchestration (run_bootstrap_flow)
+#   misc/lib/ui.sh              presentation helpers
+#   misc/lib/folio-common.sh    config loading, dependency checks
+#   misc/lib/folio-api.sh       tokens, registration, entitlement, smoke check
+#   misc/lib/docker-health.sh   container / route readiness waits
+#   misc/bootstrap-engine.sh    phase orchestration (run_bootstrap_flow)
 #
 # Usage:
 #   ./start.sh [--actualize [--pre-release]] [--native-sidecar]
@@ -43,7 +44,7 @@ source "${PROJECT_ROOT}/misc/lib/folio-common.sh"
 source "${PROJECT_ROOT}/misc/bootstrap-engine.sh"
 
 usage() {
-  ui_note "$(cat <<EOF
+  ui_info "$(cat <<EOF
 Usage: $0 [options]
 
 Options:
@@ -80,7 +81,7 @@ parse_args() {
       -h|--help)        usage; exit 0 ;;
       *)
         ui_error "Unknown argument: $1"
-        ui_note ''
+        ui_info ''
         usage
         exit 1
         ;;
@@ -190,13 +191,10 @@ main() {
   fi
 
   # Identity banner on top, then everything up to the bootstrap proper runs inside a
-  # first "Configure" phase: the interactive decisions render as branches off its
-  # gutter, and the tool/host preflight lines nest under it instead of floating
-  # unattached. run_bootstrap_flow's first phase closes Configure and continues at 02.
+  # first "Configure" phase. run_bootstrap_flow's first phase closes Configure and
+  # continues at 02. BOOTSTRAP_START anchors the completion box's total duration.
   print_run_banner
-  # Start the run clock as the first phase opens, so the completion box's total spans
-  # every numbered phase (01 Configure included), not just phase 02 onward.
-  ui_timer_start run_total
+  BOOTSTRAP_START="${SECONDS}"
   ui_phase 'Configure'
   run_prompts
   check_tools

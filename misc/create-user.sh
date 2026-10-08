@@ -23,10 +23,6 @@ source "${SCRIPT_DIR}/lib/folio-common.sh"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/folio-api.sh"
 
-# Preserve an operator-supplied host gateway before loading docker/.env, whose
-# OKAPI_URL default is container-internal and not reachable from this host script.
-HOST_OKAPI_URL="${OKAPI_URL:-}"
-
 # Load local config with the same precedence as start.sh:
 # shell env > .env.local.credentials > .env.local.
 load_folio_config
@@ -58,7 +54,7 @@ fail_with() {
   local context="$1" body="$2" detail
   detail="$(extract_api_message "${body}")"
   [[ -n "${detail}" ]] && ui_warn "${detail}"
-  is_debug && print_api_payload "${body}" stderr
+  [[ "${DEBUG:-false}" == true ]] && print_api_payload "${body}" stderr
   error "${context}"
 }
 
