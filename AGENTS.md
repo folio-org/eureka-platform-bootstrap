@@ -17,6 +17,7 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 - No new entry points. `./start.sh` and `./stop.sh` are the operator surface. Do not add top-level scripts, flags, or wrappers — extend the existing ones or their libs in `misc/`.
 - Stop and ask before expanding scope. If you believe the task genuinely needs a new script, entry point, env var, dependency, or abstraction, do not create it silently — state why in one sentence and ask first.
 - Stay cross-platform. Linux, macOS, and Windows must all keep working. No GNU-only flags, host-specific paths, or tools not already required.
+- Match what's there. Follow existing script/lib/descriptor patterns and naming; new code should read like its neighbors.
 - Prove it, minimally. Validate with the smallest real command (`bash -n`, `jq .`, the relevant `misc/tests/run.sh` check). A full runtime proof is `./start.sh`, which exports descriptor-derived image variables before invoking Compose. Do not spin up a new test harness when the offline runner already covers the area — add to it. Do not claim done without running the check.
 
 ## Current Repo Reality
@@ -25,7 +26,7 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 - `docker/.env` = committed defaults. `docker/.env.local` = local overrides. `docker/.env.local.credentials` = local secrets (never committed).
 - `./start.sh` is the single operator entrypoint; it is thin. Logic lives in `misc/bootstrap-engine.sh` and `misc/lib/{folio-common,folio-api,docker-health}.sh`.
 - `./stop.sh` is the single teardown entrypoint.
-- The offline regression net is `bash misc/tests/run.sh` (shell syntax + python unit tests).
+- The offline regression net is `bash misc/tests/run.sh` (bash syntax, bash 3.2 portability guard, python compile checks and unit tests, shell functional tests).
 
 ## Build And Run
 
@@ -42,6 +43,7 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 
 ## Conventions
 
+- Naming: `mod-*` backend modules, `sc-*` sidecars, `mgr-*` managers, `docker/` runtime/orchestration, `misc/` operator tooling, `descriptors/app-platform-minimal/` registration metadata.
 - Keep `descriptor.json` and the version-sync scripts aligned. `discovery.json` is regenerated from `descriptor.json` by `misc/docker-module-updater/run.py` during `./start.sh`, so change the descriptor, not `discovery.json`.
 - Shell: `#!/usr/bin/env bash` (POSIX `sh` in `misc/vault/scripts/`, which run inside the Vault image); `set -euo pipefail` in new or heavily edited scripts; resolve paths via `SCRIPT_DIR`/`PROJECT_ROOT`; quote expansions; capture HTTP status separately from the response body.
 - Python: stdlib-only unless a new dependency is clearly justified; 2-space indent; snake_case; `if __name__ == "__main__":` in runnable scripts.
