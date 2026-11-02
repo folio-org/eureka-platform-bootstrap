@@ -42,8 +42,8 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 
 ## Conventions
 
-- Keep `descriptor.json`, `discovery.json`, and the version-sync scripts aligned.
-- Shell: `#!/usr/bin/env bash` (POSIX `sh` in `misc/vault/scripts/`, which run inside the Vault image, where bash is not installed); `set -euo pipefail` in new or heavily edited scripts; resolve paths via `SCRIPT_DIR`/`PROJECT_ROOT`; quote expansions; capture HTTP status separately from the response body.
+- Keep `descriptor.json` and the version-sync scripts aligned. `discovery.json` is regenerated from `descriptor.json` by `misc/docker-module-updater/run.py` during `./start.sh`, so change the descriptor, not `discovery.json`.
+- Shell: `#!/usr/bin/env bash` (POSIX `sh` in `misc/vault/scripts/`, which run inside the Vault image); `set -euo pipefail` in new or heavily edited scripts; resolve paths via `SCRIPT_DIR`/`PROJECT_ROOT`; quote expansions; capture HTTP status separately from the response body.
 - Python: stdlib-only unless a new dependency is clearly justified; 2-space indent; snake_case; `if __name__ == "__main__":` in runnable scripts.
 - YAML/JSON: 2-space indent; env stays inline in Compose; preserve descriptor module ordering.
 - Operator-facing UX changes: define explicit UX success criteria first (less terminal noise, clearer step boundaries, fewer prompts); architectural cleanup is not proof of UX improvement; run a real operator smoke flow and judge the visible output.
