@@ -45,6 +45,7 @@ Goal of this repo: a simple, surgically precise, cross-platform-stable local FOL
 
 - Naming: `mod-*` backend modules, `sc-*` sidecars, `mgr-*` managers, `docker/` runtime/orchestration, `misc/` operator tooling, `descriptors/app-platform-minimal/` registration metadata.
 - Keep `descriptor.json` and the version-sync scripts aligned. `discovery.json` is regenerated from `descriptor.json` by `misc/docker-module-updater/run.py` during `./start.sh`, so change the descriptor, not `discovery.json`.
+- `skills/local-eureka-env/` is the source of an installable agent skill that operates this environment from other repositories. When a change affects a command, port, file, or credential the skill names, update the skill in the same change.
 - Shell: `#!/usr/bin/env bash` (POSIX `sh` in `misc/vault/scripts/`, which run inside the Vault image); `set -euo pipefail` in new or heavily edited scripts; resolve paths via `SCRIPT_DIR`/`PROJECT_ROOT`; quote expansions; capture HTTP status separately from the response body.
 - Python: stdlib-only unless a new dependency is clearly justified; 2-space indent; snake_case; `if __name__ == "__main__":` in runnable scripts.
 - YAML/JSON: 2-space indent; env stays inline in Compose; preserve descriptor module ordering.
