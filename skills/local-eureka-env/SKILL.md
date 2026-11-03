@@ -1,18 +1,28 @@
 ---
 name: local-eureka-env
-description: Use when working in any EBSCO FOLIO repository and the task involves the local FOLIO Eureka environment — running Karate or integration tests locally (karate.env=local, localhost:8000), deploying a locally built module image into the environment, attaching a debugger to a running module, or raising/reproducing an issue on the local environment before or after fixing it.
+description: Use when working in any FOLIO repository and the task involves the local FOLIO Eureka environment — running Karate or integration tests locally (karate.env=local, localhost:8000), deploying a locally built module image into the environment, attaching a debugger to a running module, or raising/reproducing an issue on the local environment before or after fixing it.
 ---
 
 # Local Eureka Environment
 
-A full local FOLIO Eureka platform (Kong, Keycloak, Vault, Kafka, PostgreSQL, managers, 12 `mod-*`
-modules with `sc-*` sidecars) lives in `~/EBSCO-FOLIO/eureka-platform-bootstrap`. It is raised and
-torn down only by that repo's `./start.sh` and `./stop.sh`. Everything else — tests, deploys,
-debugging, reproduction — happens from the repository you are working in, against this environment.
+A full local FOLIO Eureka platform (Kong or APISIX, Keycloak, Vault, Kafka, PostgreSQL, managers,
+12 `mod-*` modules with `sc-*` sidecars) lives in a local clone of
+`folio-org/eureka-platform-bootstrap`, called `<bootstrap>` below. It is raised and torn down only
+by that repo's `./start.sh` and `./stop.sh`. Everything else — tests, deploys, debugging,
+reproduction — happens from the repository you are working in, against this environment.
 
 If this skill is mentioned but no environment operation was requested, say so and stop.
 
 ## Step 1 — Discover the environment state
+
+Find `<bootstrap>` first:
+
+1. The current repository, if it is `eureka-platform-bootstrap`.
+2. Existing containers name it; this prints `<bootstrap>/docker`:
+   `docker ps -a --filter label=com.docker.compose.project=folio-platform-minimal --format '{{.Label "com.docker.compose.project.working_dir"}}' | head -1`
+3. Otherwise ask the user for the path, or offer to clone the repository. Do not guess.
+
+Use the absolute path in every command below; the shell does not keep `cd` between commands.
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8000/   # 200/404 = gateway up
@@ -22,7 +32,7 @@ docker ps --filter label=com.docker.compose.project=folio-platform-minimal --for
 | Observation | Action |
 |---|---|
 | Gateway answers, containers healthy | proceed with the task |
-| Nothing running | `cd ~/EBSCO-FOLIO/eureka-platform-bootstrap && ./start.sh --yes` (first run: interactive; ~10+ min) |
+| Nothing running | `cd <bootstrap> && ./start.sh --yes` (first run: interactive; ~10+ min) |
 | Containers exist but a service is unhealthy | see Triage; recovery is a plain `./start.sh` re-run — every step is idempotent. A changed compose file is NOT applied by a re-run alone — see Restart and propagating changes |
 
 ## Environment facts
@@ -44,7 +54,7 @@ Never rely on remembered values — re-read the file in the Verify-in column.
 Any `docker compose up` command needs the environment context first:
 
 ```bash
-cd ~/EBSCO-FOLIO/eureka-platform-bootstrap/docker
+cd <bootstrap>/docker
 source .env.local.credentials
 eval "$(python3 ../misc/docker-module-updater/run.py --module-env)"
 ```
@@ -52,7 +62,7 @@ eval "$(python3 ../misc/docker-module-updater/run.py --module-env)"
 | Goal | Command |
 |---|---|
 | Restart a service in place (no config change) | `docker compose restart <svc>` |
-| Make a compose-file change take effect (new env var, port, image) | `docker compose up -d --force-recreate <svc>` — a plain re-run leaves the old container; verified with a sidecar env var that did not propagate until forced |
+| Make a compose-file change take effect (new env var, port, image) | `docker compose up -d --force-recreate <svc>` — a plain re-run leaves the old container |
 | Recreate all sidecars after editing `docker-compose.minimal.sidecar.yml` | `docker compose up -d --force-recreate $(docker compose config --services \| grep '^sc-')` |
 | Full re-raise (always recreates, volumes kept) | `cd .. && ./stop.sh --yes && ./start.sh --yes` |
 
@@ -61,8 +71,11 @@ After any recreate, verify: `docker ps --filter name=<svc>` shows healthy, and f
 
 ## Step 2 — Run Karate tests locally (folio-integration-tests)
 
+Run from a local clone of `folio-org/folio-integration-tests`; if you cannot find one, ask the user
+for its path.
+
 ```bash
-cd ~/EBSCO-FOLIO/folio-integration-tests
+cd <folio-integration-tests>
 mvn test -pl common,testrail-integration,mod-users-keycloak \
   -Dkarate.env=local \
   -DargLine="-Dadmin.name=folio -Dadmin.password=folio" \
@@ -87,7 +100,7 @@ You built an image in the module repo (e.g. `mod-scheduler:myfix`). The environm
 descriptor-derived tags (`MOD_<NAME>_IMAGE`). Do not edit compose files. Retag and recreate:
 
 ```bash
-cd ~/EBSCO-FOLIO/eureka-platform-bootstrap/docker
+cd <bootstrap>/docker
 source .env.local.credentials                                  # real Vault token + DB creds
 eval "$(python3 ../misc/docker-module-updater/run.py --module-env)"   # exports MOD_*_IMAGE/_VERSION
 docker tag mod-scheduler:myfix "$MOD_SCHEDULER_IMAGE"
